@@ -19,17 +19,19 @@ import { useChatStore } from '../store/useChatStore';
 import { useSocketEvents } from './hooks/useSocketEvents';
 
 const EmptyWorkspace = ({ icon: Icon, title, subtitle, action, actionText }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
-    <div style={{ width: '96px', height: '96px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.06)', border: '1px solid var(--border-subtle)' }}>
-      <Icon size={44} color="var(--accent-primary)" strokeWidth={1.5} />
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', position: 'relative' }}>
+    <div style={{ margin: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ width: '110px', height: '110px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '28px', boxShadow: '0 20px 40px rgba(0,0,0,0.1), inset 0 2px 4px rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }}>
+        <Icon size={52} color="var(--accent-primary)" strokeWidth={1.5} />
+      </div>
+      <h2 style={{ fontSize: '2rem', color: 'var(--text-primary)', margin: '0 0 12px 0', fontWeight: '800', letterSpacing: '-0.5px' }}>{title}</h2>
+      <p style={{ fontSize: '1.05rem', maxWidth: '340px', textAlign: 'center', margin: '0 0 32px 0', lineHeight: '1.6', opacity: 0.8 }}>{subtitle}</p>
+      {action && (
+        <button onClick={action} style={{ padding: '14px 28px', backgroundColor: 'var(--accent-primary)', color: '#2A2511', border: 'none', borderRadius: '100px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', boxShadow: '0 4px 14px rgba(252, 203, 6, 0.25)', transition: 'all 0.2s ease' }}>
+          {actionText}
+        </button>
+      )}
     </div>
-    <h2 style={{ fontSize: '1.75rem', color: 'var(--text-primary)', margin: '0 0 12px 0', fontWeight: '800', letterSpacing: '-0.5px' }}>{title}</h2>
-    <p style={{ fontSize: '1rem', maxWidth: '340px', textAlign: 'center', margin: '0 0 32px 0', lineHeight: '1.6', opacity: 0.8 }}>{subtitle}</p>
-    {action && (
-      <button onClick={action} style={{ padding: '14px 28px', backgroundColor: 'var(--accent-primary)', color: '#2A2511', border: 'none', borderRadius: '100px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', boxShadow: '0 4px 14px rgba(252, 203, 6, 0.25)', transition: 'all 0.2s ease' }}>
-        {actionText}
-      </button>
-    )}
   </div>
 );
 
@@ -156,11 +158,24 @@ const App = () => {
       ) : (
         <motion.div key="main-app" initial={{ opacity: 0, filter: 'blur(12px)' }} animate={{ opacity: 1, filter: 'blur(0px)' }} className="app-container">
           <GlobalNav activeNav={activeNav} setActiveNav={setActiveNav} currentRoom={currentRoom} />
+          
           <ChatListPane
-            activeNav={activeNav} rooms={availableRooms} currentRoom={currentRoom}
-            setCurrentRoom={setCurrentRoom} onLogout={handleLogout} searchInputRef={searchInputRef}
+            activeNav={activeNav} 
+            rooms={availableRooms} 
+            currentRoom={currentRoom}
+            setCurrentRoom={setCurrentRoom} 
+            onLogout={handleLogout} 
+            searchInputRef={searchInputRef}
             onGlobalAction={(action) => action === 'OPEN_VAULT' && setIsVaultModalOpen(true)}
+            socket={socket}
+            activeCallDetails={activeCallDetails}
+            setActiveCallDetails={setActiveCallDetails}
+            openModal={(mode) => {
+                setCreationMode(mode);
+                setIsCreationModalOpen(true);
+            }}
           />
+
           {(!isMobile || currentRoom || activeCallDetails) && (
             <div className="active-workspace" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               {activeNav === 'Chats' && currentRoom ? (
@@ -174,6 +189,18 @@ const App = () => {
               )}
             </div>
           )}
+
+          {/* --- MODALS --- */}
+          <NewChatModal
+            isOpen={isCreationModalOpen}
+            onClose={() => setIsCreationModalOpen(false)}
+            initialMode={creationMode}
+            onRoomCreated={(room) => {
+                setAvailableRooms(prev => [...prev, room]);
+                setCurrentRoom(room.name);
+            }}
+          />
+
         </motion.div>
       )}
     </AnimatePresence>

@@ -12,10 +12,10 @@ const formatTime = (dateString) => {
     const now = new Date();
     const isToday = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
     if (isToday) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
+
     const isYesterday = new Date(now.setDate(now.getDate() - 1)).getDate() === date.getDate();
     if (isYesterday) return 'Yesterday';
-    
+
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
@@ -35,7 +35,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
     // Filter logic
     const filteredRooms = rooms.filter(room => {
         let displayRoomName = room.name || 'Unknown';
-        
+
         if (room.type === 'direct' || room.type === 'secret') {
             const otherParticipant = room.participants?.find(p => String(p.userId?._id || p.userId) !== myId);
             if (otherParticipant && otherParticipant.userId?.username) {
@@ -47,9 +47,9 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
 
         if (searchQuery && !displayRoomName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         if (activeFilter === 'Channels' && room.type !== 'channel') return false;
-        
+
         if (activeFilter === 'DMs' && room.type !== 'direct' && room.type !== 'secret') return false;
-        
+
         if (activeFilter === 'Unread') {
             if (!room.lastMessage) return false;
             const myParticipantRecord = room.participants?.find(p => String(p.userId?._id || p.userId) === myId);
@@ -84,12 +84,12 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                     </div>
                 ) : (
                     // True Default Empty State
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
-                        <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 16px rgba(0,0,0,0.05)' }}>
-                            <MessageSquareDashed size={32} color="var(--accent-primary)" />
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '80px 20px', textAlign: 'center' }}>
+                        <div style={{ width: '88px', height: '88px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', border: '1px solid var(--border-subtle)', boxShadow: '0 12px 24px rgba(0,0,0,0.06)' }}>
+                            <MessageSquareDashed size={40} color="var(--accent-primary)" />
                         </div>
-                        <span style={{ color: 'var(--text-primary)', fontWeight: '700', fontSize: '1.05rem', marginBottom: '8px' }}>It's quiet here</span>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.5', maxWidth: '200px' }}>Tap the + button below to start a new conversation.</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: '800', fontSize: '1.2rem', marginBottom: '10px' }}>It's quiet here</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.5', maxWidth: '220px' }}>Tap the + button below to start a new conversation.</span>
                     </div>
                 )}
             </motion.div>
@@ -112,7 +112,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                         displayAvatar = otherUser.avatar || `https://ui-avatars.com/api/?name=${displayRoomName}&background=random`;
                         isOnline = otherUser.isOnline;
                     } else {
-                        displayRoomName = "Unknown Contact"; 
+                        displayRoomName = "Unknown Contact";
                     }
                 }
 
@@ -136,7 +136,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                                 {isChannel ? <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>#</span> : <img src={displayAvatar} alt={displayRoomName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />}
                                 {!isChannel && isOnline && <div style={{ position: 'absolute', bottom: 0, right: 0, width: '14px', height: '14px', backgroundColor: '#10b981', border: '3px solid var(--bg-primary)', borderRadius: '50%' }} />}
                             </div>
-                            
+
                             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '4px' }}>
                                     <span style={{ fontWeight: unreadCount > 0 ? '700' : '600', color: isActive || unreadCount > 0 ? 'var(--text-primary)' : 'var(--text-primary)', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
