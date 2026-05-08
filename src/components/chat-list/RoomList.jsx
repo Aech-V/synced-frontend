@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { MessageSquareDashed, SearchX, CheckCircle, Loader2 } from 'lucide-react';
 import StatusIndicator from '../message/StatusIndicator';
 
 const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
@@ -22,43 +23,86 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
     const myId = String(currentUser.id || currentUser._id);
 
-    if (!rooms || rooms.length === 0) return <div style={{ textAlign: 'center', marginTop: '40px', color: 'var(--text-secondary)' }}>Loading conversations...</div>;
+    // Sleek Loading State (Only if rooms array is literally undefined)
+    if (!rooms) return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px' }}>
+            <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, ease: 'linear', duration: 1 }}>
+                <Loader2 size={28} color="var(--text-secondary)" />
+            </motion.div>
+        </div>
+    );
+
+    // Filter logic
+    const filteredRooms = rooms.filter(room => {
+        let displayRoomName = room.name || 'Unknown';
+        
+        if (room.type === 'direct' || room.type === 'secret') {
+            const otherParticipant = room.participants?.find(p => String(p.userId?._id || p.userId) !== myId);
+            if (otherParticipant && otherParticipant.userId?.username) {
+                displayRoomName = otherParticipant.userId.username;
+            } else {
+                displayRoomName = "Unknown Contact";
+            }
+        }
+
+        if (searchQuery && !displayRoomName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+        if (activeFilter === 'Channels' && room.type !== 'channel') return false;
+        
+        if (activeFilter === 'DMs' && room.type !== 'direct' && room.type !== 'secret') return false;
+        
+        if (activeFilter === 'Unread') {
+            if (!room.lastMessage) return false;
+            const myParticipantRecord = room.participants?.find(p => String(p.userId?._id || p.userId) === myId);
+            const lastRead = myParticipantRecord?.lastReadTimestamp ? new Date(myParticipantRecord.lastReadTimestamp) : new Date(0);
+            const lastMessageTime = new Date(room.lastMessage.createdAt);
+            if (lastMessageTime <= lastRead) return false;
+        }
+        return true;
+    });
+
+    // Premium Dynamic Empty States
+    if (filteredRooms.length === 0) {
+        return (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ padding: '8px 16px' }}>
+                {searchQuery ? (
+                    // Search Empty State
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
+                        <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '1px solid var(--border-subtle)' }}>
+                            <SearchX size={28} color="var(--text-secondary)" />
+                        </div>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: '600', fontSize: '1rem', marginBottom: '8px' }}>No results found</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>We couldn't find anything matching "{searchQuery}".</span>
+                    </div>
+                ) : activeFilter === 'Unread' ? (
+                    // Unread Empty State
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
+                        <div style={{ width: '64px', height: '64px', borderRadius: '50%', backgroundColor: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                            <CheckCircle size={28} color="#10b981" />
+                        </div>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: '600', fontSize: '1rem', marginBottom: '8px' }}>All caught up!</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>You have no unread messages.</span>
+                    </div>
+                ) : (
+                    // True Default Empty State
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', textAlign: 'center' }}>
+                        <div style={{ width: '72px', height: '72px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 16px rgba(0,0,0,0.05)' }}>
+                            <MessageSquareDashed size={32} color="var(--accent-primary)" />
+                        </div>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: '700', fontSize: '1.05rem', marginBottom: '8px' }}>It's quiet here</span>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.5', maxWidth: '200px' }}>Tap the + button below to start a new conversation.</span>
+                    </div>
+                )}
+            </motion.div>
+        );
+    }
 
     return (
         <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ padding: '8px 16px' }}>
-            {rooms.filter(room => {
-                let displayRoomName = room.name || 'Unknown';
-                
-                // 1. Bulletproof Identity Extraction for filtering
-                if (room.type === 'direct' || room.type === 'secret') {
-                    const otherParticipant = room.participants?.find(p => String(p.userId?._id || p.userId) !== myId);
-                    if (otherParticipant && otherParticipant.userId?.username) {
-                        displayRoomName = otherParticipant.userId.username;
-                    } else {
-                        displayRoomName = "Unknown Contact";
-                    }
-                }
-
-                if (searchQuery && !displayRoomName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                if (activeFilter === 'Channels' && room.type !== 'channel') return false;
-                
-                // FIX: Allow both 'direct' and 'secret' chats to show up under the DMs tab
-                if (activeFilter === 'DMs' && room.type !== 'direct' && room.type !== 'secret') return false;
-                
-                if (activeFilter === 'Unread') {
-                    if (!room.lastMessage) return false;
-                    const myParticipantRecord = room.participants?.find(p => String(p.userId?._id || p.userId) === myId);
-                    const lastRead = myParticipantRecord?.lastReadTimestamp ? new Date(myParticipantRecord.lastReadTimestamp) : new Date(0);
-                    const lastMessageTime = new Date(room.lastMessage.createdAt);
-                    if (lastMessageTime <= lastRead) return false;
-                }
-                return true;
-            }).map(room => {
+            {filteredRooms.map(room => {
                 let displayRoomName = room.name;
                 let displayAvatar = `https://ui-avatars.com/api/?name=${room.name}&background=random`;
                 let isOnline = false;
 
-                // 2. Exact UI Generation
                 if (room.type === 'direct' || room.type === 'secret') {
                     const otherParticipant = room.participants?.find(p => String(p.userId?._id || p.userId) !== myId);
                     const otherUser = otherParticipant?.userId;
@@ -68,7 +112,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                         displayAvatar = otherUser.avatar || `https://ui-avatars.com/api/?name=${displayRoomName}&background=random`;
                         isOnline = otherUser.isOnline;
                     } else {
-                        displayRoomName = "Unknown Contact"; // Prevents the UUID string leak
+                        displayRoomName = "Unknown Contact"; 
                     }
                 }
 
