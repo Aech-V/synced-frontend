@@ -72,12 +72,19 @@ const App = () => {
 
   useEffect(() => {
     if (!token) return;
-    const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
-    const newSocket = io(API_URL, { auth: { token } });
+
+    // 1. Grab the live URL from Vite, and strip the '/api' from the end
+    const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const socketUrl = rawApiUrl.replace('/api', '');
+
+    // 2. Pass the dynamic URL to Socket.io
+    const newSocket = io(socketUrl, { auth: { token } });
+
     newSocket.on("connect_error", (err) => {
       if (err.message.includes("Authentication") || err.message.includes("token")) handleLogout();
     });
     setSocket(newSocket);
+
     apiClient.get('/users/rooms').then(res => {
       setAvailableRooms(res.data || []);
       res.data?.forEach(room => newSocket.emit('join_room', room.name));
