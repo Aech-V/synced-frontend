@@ -73,12 +73,13 @@ const App = () => {
   useEffect(() => {
     if (!token) return;
 
-    // 1. Grab the live URL from Vite, and strip the '/api' from the end
     const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     const socketUrl = rawApiUrl.replace('/api', '');
 
-    // 2. Pass the dynamic URL to Socket.io
-    const newSocket = io(socketUrl, { auth: { token } });
+    const newSocket = io(socketUrl, { 
+        auth: { token },
+        transports: ['polling', 'websocket'] 
+    });
 
     newSocket.on("connect_error", (err) => {
       if (err.message.includes("Authentication") || err.message.includes("token")) handleLogout();
