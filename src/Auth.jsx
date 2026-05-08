@@ -83,7 +83,7 @@ const Auth = ({ onLoginSuccess }) => {
     const [authView, setAuthView] = useState('login'); // 'login', 'signup', 'otp'
     const [serverError, setServerError] = useState('');
 
-    // Formik Setup (Condensed for brevity)
+    // Formik Setup
     const formik = useFormik({
         initialValues: { username: '', email: '', password: '', phone: '' },
         validationSchema: yup.object({
@@ -98,7 +98,6 @@ const Auth = ({ onLoginSuccess }) => {
                 const endpoint = authView === 'login' ? '/auth/login' : '/auth/register';
                 const response = await apiClient.post(endpoint, values);
                 
-                // FIX: Extract 'accessToken' for logins, and 'token' for signups
                 const { user, sessionId } = response.data;
                 const token = response.data.token || response.data.accessToken;
                 
@@ -123,8 +122,20 @@ const Auth = ({ onLoginSuccess }) => {
             {/* THE BASE LAYER: LOGIN */}
             <motion.div 
                 className="glass-panel"
-                animate={{ scale: authView === 'login' ? 1 : 0.95, opacity: authView === 'login' ? 1 : 0.5, filter: authView === 'login' ? 'blur(0px)' : 'blur(4px)' }}
-                style={{ position: 'absolute', width: '90%', maxWidth: '400px', borderRadius: '24px', padding: '40px', zIndex: 10 }}
+                animate={{ 
+                    scale: authView === 'login' ? 1 : 0.95, 
+                    opacity: authView === 'login' ? 1 : 0,
+                    filter: authView === 'login' ? 'blur(0px)' : 'blur(8px)',
+                }}
+                style={{ 
+                    position: 'absolute', 
+                    width: '90%', 
+                    maxWidth: '400px', 
+                    borderRadius: '24px', 
+                    padding: '40px', 
+                    zIndex: 10,
+                    pointerEvents: authView === 'login' ? 'auto' : 'none'
+                }}
             >
                 <div style={{ textAlign: 'center', marginBottom: '32px' }}>
                     <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: '800', letterSpacing: '-1px' }}>Welcome back.</h1>
@@ -146,7 +157,6 @@ const Auth = ({ onLoginSuccess }) => {
                     </motion.button>
                 </form>
 
-                {/* PREMIUM: Biometric Passkey Hook */}
                 <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <button style={{ width: '100%', padding: '14px', borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '600' }}>
                         <Fingerprint size={18} /> Sign in with Passkey
