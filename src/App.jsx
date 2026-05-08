@@ -72,7 +72,8 @@ const App = () => {
 
   useEffect(() => {
     if (!token) return;
-    const newSocket = io("http://localhost:5000", { auth: { token } });
+    const API_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    const newSocket = io(API_URL, { auth: { token } });
     newSocket.on("connect_error", (err) => {
       if (err.message.includes("Authentication") || err.message.includes("token")) handleLogout();
     });
@@ -106,14 +107,14 @@ const App = () => {
       }
 
       const tempId = Date.now().toString();
-      const socketPayload = { 
-        room: currentRoom, type: payload.type || 'text', text: payload.text || '', 
-        imageUrl: finalImageUrl, audioUrl: finalAudioUrl, tempId 
+      const socketPayload = {
+        room: currentRoom, type: payload.type || 'text', text: payload.text || '',
+        imageUrl: finalImageUrl, audioUrl: finalAudioUrl, tempId
       };
 
-      const optimisticMsg = { 
-        ...socketPayload, _id: tempId, senderId: currentUserId, 
-        senderName: currentUserObj.username, status: 'sending', createdAt: new Date().toISOString() 
+      const optimisticMsg = {
+        ...socketPayload, _id: tempId, senderId: currentUserId,
+        senderName: currentUserObj.username, status: 'sending', createdAt: new Date().toISOString()
       };
 
       addOptimistic(currentRoom, optimisticMsg);
@@ -123,7 +124,7 @@ const App = () => {
           removeOptimistic(currentRoom, tempId);
           alert("Failed to send message.");
         } else {
-            removeOptimistic(currentRoom, tempId);
+          removeOptimistic(currentRoom, tempId);
         }
       });
     } catch (error) {
@@ -147,8 +148,8 @@ const App = () => {
       ) : (
         <motion.div key="main-app" initial={{ opacity: 0, filter: 'blur(12px)' }} animate={{ opacity: 1, filter: 'blur(0px)' }} className="app-container">
           <GlobalNav activeNav={activeNav} setActiveNav={setActiveNav} currentRoom={currentRoom} />
-          <ChatListPane 
-            activeNav={activeNav} rooms={availableRooms} currentRoom={currentRoom} 
+          <ChatListPane
+            activeNav={activeNav} rooms={availableRooms} currentRoom={currentRoom}
             setCurrentRoom={setCurrentRoom} onLogout={handleLogout} searchInputRef={searchInputRef}
             onGlobalAction={(action) => action === 'OPEN_VAULT' && setIsVaultModalOpen(true)}
           />
