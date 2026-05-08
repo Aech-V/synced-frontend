@@ -7,32 +7,32 @@ import { triggerHaptic } from '../../utils/haptics';
 // --- PREMIUM SVG SEGMENTED RING ---
 const StatusRing = ({ count }) => {
     if (count === 0) return null;
-    
+
     const size = 60;
     const strokeWidth = 2.5;
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
-    
+
     if (count === 1) {
         return (
             <svg width={size} height={size} style={{ position: 'absolute', top: -2, left: -2, zIndex: 0 }}>
-                <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="var(--accent-primary)" strokeWidth={strokeWidth} />
+                <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--accent-primary)" strokeWidth={strokeWidth} />
             </svg>
         );
     }
 
     const gap = 6; // Pixels between segments
     const segmentLength = (circumference / count) - gap;
-    const dashArray = `${segmentLength} ${circumference}`; 
-    
+    const dashArray = `${segmentLength} ${circumference}`;
+
     return (
         <svg width={size} height={size} style={{ position: 'absolute', top: -2, left: -2, transform: 'rotate(-90deg)', zIndex: 0 }}>
             {Array.from({ length: count }).map((_, i) => {
                 const offset = -(circumference / count) * i;
                 return (
-                    <circle 
-                        key={i} cx={size/2} cy={size/2} r={radius} fill="none" 
-                        stroke="var(--accent-primary)" strokeWidth={strokeWidth} 
+                    <circle
+                        key={i} cx={size / 2} cy={size / 2} r={radius} fill="none"
+                        stroke="var(--accent-primary)" strokeWidth={strokeWidth}
                         strokeDasharray={dashArray} strokeDashoffset={offset} strokeLinecap="round"
                     />
                 );
@@ -44,7 +44,7 @@ const StatusRing = ({ count }) => {
 const StatusTab = ({ setViewingStatus }) => {
     const [statuses, setStatuses] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
-    
+
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
     const myUserId = currentUser?.id || currentUser?._id;
 
@@ -52,7 +52,8 @@ const StatusTab = ({ setViewingStatus }) => {
         const fetchStatuses = async () => {
             try {
                 const res = await apiClient.get('/status');
-                setStatuses(res.data);
+                const statusArray = Array.isArray(res.data) ? res.data : (res.data.data || []);
+                setStatuses(statusArray);
             } catch (error) {
                 console.error("Failed to load statuses", error);
             }
@@ -62,14 +63,16 @@ const StatusTab = ({ setViewingStatus }) => {
 
     const groupedStatuses = useMemo(() => {
         const groups = {};
+        if (!Array.isArray(statuses)) return groups;
+
         statuses.forEach(status => {
             const uid = status.userId?._id;
             if (!uid) return;
             if (!groups[uid]) groups[uid] = { user: status.userId, items: [], latestAt: 0 };
-            
+
             groups[uid].items.push(status);
             groups[uid].items.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-            
+
             const time = new Date(status.createdAt).getTime();
             if (time > groups[uid].latestAt) groups[uid].latestAt = time;
         });
@@ -77,7 +80,7 @@ const StatusTab = ({ setViewingStatus }) => {
     }, [statuses]);
 
     const myStatusGroup = groupedStatuses[myUserId];
-    
+
     const otherStatusGroups = Object.values(groupedStatuses)
         .filter(g => g.user?._id !== myUserId)
         .sort((a, b) => b.latestAt - a.latestAt);
@@ -102,21 +105,21 @@ const StatusTab = ({ setViewingStatus }) => {
             console.error("Upload failed", error);
         } finally {
             setIsUploading(false);
-            e.target.value = null; 
+            e.target.value = null;
         }
     };
 
     return (
         <div style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-primary)' }}>
-            
+
             {/* MY STATUS HERO */}
             <div style={{ padding: '24px 20px', borderBottom: '8px solid var(--bg-surface)' }}>
                 {myStatusGroup ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        
+
                         {/* LEFT SIDE: View Status */}
-                        <div 
-                            onClick={() => setViewingStatus({ ...myStatusGroup, isOwn: true })} 
+                        <div
+                            onClick={() => setViewingStatus({ ...myStatusGroup, isOwn: true })}
                             style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'opacity 0.2s', flex: 1 }}
                             onMouseEnter={(e) => e.currentTarget.style.opacity = 0.8}
                             onMouseLeave={(e) => e.currentTarget.style.opacity = 1}
@@ -132,11 +135,11 @@ const StatusTab = ({ setViewingStatus }) => {
                         </div>
 
                         {/* RIGHT SIDE: Animated Upload Button */}
-                        <motion.div 
+                        <motion.div
                             whileTap={!isUploading ? { scale: 0.9 } : {}}
                             style={{ position: 'relative', width: '42px', height: '42px', backgroundColor: 'var(--bg-surface)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isUploading ? 'wait' : 'pointer', border: '1px solid var(--border-subtle)', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', transition: 'all 0.2s', color: 'var(--text-primary)' }}
-                            onMouseEnter={(e) => { if(!isUploading) { e.currentTarget.style.backgroundColor = 'var(--accent-primary)'; e.currentTarget.style.color = '#000'; e.currentTarget.style.borderColor = 'var(--accent-primary)'; }}}
-                            onMouseLeave={(e) => { if(!isUploading) { e.currentTarget.style.backgroundColor = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; }}}
+                            onMouseEnter={(e) => { if (!isUploading) { e.currentTarget.style.backgroundColor = 'var(--accent-primary)'; e.currentTarget.style.color = '#000'; e.currentTarget.style.borderColor = 'var(--accent-primary)'; } }}
+                            onMouseLeave={(e) => { if (!isUploading) { e.currentTarget.style.backgroundColor = 'var(--bg-surface)'; e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.borderColor = 'var(--border-subtle)'; } }}
                         >
                             {isUploading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><Loader2 size={18} /></motion.div> : <Plus size={20} />}
                             <input type="file" accept="image/*,video/*" onChange={handleUpload} style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: isUploading ? 'wait' : 'pointer', zIndex: 10 }} disabled={isUploading} />
@@ -147,7 +150,7 @@ const StatusTab = ({ setViewingStatus }) => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative' }}>
                         <div style={{ position: 'relative', width: '56px', height: '56px' }}>
                             <img src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.username || 'U'}&background=random`} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                            
+
                             {/* Animated Mini-Upload Badge */}
                             <div style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: 'var(--accent-primary)', borderRadius: '50%', padding: '4px', display: 'flex', border: '3px solid var(--bg-primary)' }}>
                                 {isUploading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><Loader2 size={14} color="#000" /></motion.div> : <Plus size={14} color="#000" strokeWidth={3} />}
@@ -165,7 +168,7 @@ const StatusTab = ({ setViewingStatus }) => {
             {/* RECENT UPDATES FEED */}
             <div style={{ padding: '20px 20px' }}>
                 <h4 style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '800', marginBottom: '16px' }}>Recent Updates</h4>
-                
+
                 {otherStatusGroups.length === 0 ? (
                     // PREMIUM EMPTY STATE CARD
                     <div style={{ padding: '32px 20px', textAlign: 'center', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', border: '1px dashed var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -178,9 +181,9 @@ const StatusTab = ({ setViewingStatus }) => {
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         {otherStatusGroups.map(group => (
-                            <div 
-                                key={group.user._id} 
-                                onClick={() => setViewingStatus(group)} 
+                            <div
+                                key={group.user._id}
+                                onClick={() => setViewingStatus(group)}
                                 style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'opacity 0.2s' }}
                                 onMouseEnter={(e) => e.currentTarget.style.opacity = 0.8}
                                 onMouseLeave={(e) => e.currentTarget.style.opacity = 1}
