@@ -536,21 +536,21 @@ body {
     opacity: 0.5;
 }
 
-/* FIXED GLASS PANEL: Now uses correct RGB variables */
 .glass-panel {
-    background: rgba(var(--bg-surface-rgb), 0.65);
+    /* Force a deep, rich dark glass to prevent washed-out text */
+    background: rgba(15, 15, 18, 0.55); 
     backdrop-filter: blur(28px);
     -webkit-backdrop-filter: blur(28px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* SOLID PANEL: For overlapping sheets to prevent bleed-through */
 .solid-panel {
-    background: var(--bg-surface);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5);
+    background: #111113; /* Deep OLED-style black/gray */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.6);
 }
+
 
 /* ========================================= */
 /* PERFECTED FLOATING INPUT ENGINE           */
@@ -602,10 +602,10 @@ body {
 }
 
 /* Perfected transition math */
+/* Ensure the floating input text remains legible in error states */
 .floating-input:focus ~ .floating-label,
 .floating-input:not(:placeholder-shown) ~ .floating-label {
     top: 14px;
     transform: translateY(-50%) scale(0.75);
-    color: var(--accent-primary);
     font-weight: 600;
 }
