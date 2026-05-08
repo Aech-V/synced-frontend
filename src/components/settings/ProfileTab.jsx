@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, MapPin, Link as LinkIcon, Clock, CheckCircle2, AlertCircle, Save, Phone, LocateFixed, Loader2, ChevronDown } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../utils/api'; // Replaced raw axios with your dynamic API client
 import { triggerHaptic } from '../../utils/haptics';
 import ImageCropperModal from './ImageCropperModal';
 import AuthVerificationModal from './AuthVerificationModal';
@@ -44,15 +44,14 @@ const InputBlock = ({ label, value, onChange, placeholder, icon: Icon, type = "t
     </div>
 );
 
+// Dynamic Upload using apiClient
 const uploadMediaFile = async (file) => {
     const formData = new FormData();
     formData.append('avatar', file);
 
-    const token = localStorage.getItem('synced_token');
-    const response = await axios.post('http://localhost:5000/api/users/upload-avatar', formData, {
+    const response = await apiClient.post('/users/upload-avatar', formData, {
         headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${token}`
+            'Content-Type': 'multipart/form-data'
         }
     });
     return response.data;
@@ -102,9 +101,11 @@ const ProfileTab = () => {
             async (position) => {
                 try {
                     const { latitude, longitude } = position.coords;
-                    const res = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    // External APIs can remain as raw axios, or native fetch
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+                    const data = await res.json();
                     
-                    const address = res.data.address;
+                    const address = data.address;
                     const city = address.city || address.town || address.state || "Unknown City";
                     const country = address.country || "";
                     
@@ -144,10 +145,7 @@ const ProfileTab = () => {
     const checkUsername = async (uName) => {
         setUsernameStatus({ checking: true, available: false, error: null });
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get(`http://localhost:5000/api/users/check-username?u=${uName}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await apiClient.get(`/users/check-username?u=${uName}`);
             setUsernameStatus({ checking: false, available: res.data.available, error: null });
         } catch (err) {
             setUsernameStatus({ checking: false, available: false, error: err.response?.data?.error || 'Error checking name' });
@@ -168,19 +166,14 @@ const ProfileTab = () => {
 
         setIsSaving(true);
         try {
-            const token = localStorage.getItem('synced_token');
-
             if (formData.phone !== user.phoneNumber && typeof formData.phone === 'string' && formData.phone.trim() !== '') {
-                await axios.post('http://localhost:5000/api/users/send-otp',
-                    { phoneNumber: formData.phone },
-                    { headers: { Authorization: `Bearer ${token}` } }
-                );
+                await apiClient.post('/users/send-otp', { phoneNumber: formData.phone });
                 setIsSaving(false);
                 setShowOtp(true);
                 return;
             }
 
-            await finalProfileSave(token);
+            await finalProfileSave();
 
         } catch (error) {
             triggerHaptic('error');
@@ -189,7 +182,7 @@ const ProfileTab = () => {
         }
     };
 
-    const finalProfileSave = async (token) => {
+    const finalProfileSave = async () => {
         let expiresAt = null;
         if (statusExpiry === '1hr') expiresAt = new Date(Date.now() + 60 * 60 * 1000);
         if (statusExpiry === 'today') { expiresAt = new Date(); expiresAt.setHours(23, 59, 59, 999); }
@@ -199,9 +192,7 @@ const ProfileTab = () => {
             currentStatus: { text: formData.about, expiresAt }
         };
 
-        const response = await axios.put('http://localhost:5000/api/users/profile', payload, {
-            headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await apiClient.put('/users/profile', payload);
 
         triggerHaptic('success');
         localStorage.setItem('synced_user', JSON.stringify(response.data.user));
@@ -393,14 +384,10 @@ const ProfileTab = () => {
                 phoneNumber={formData.phone}
                 onClose={() => setShowOtp(false)}
                 onVerify={async (code) => {
-                    const token = localStorage.getItem('synced_token');
-                    await axios.post('http://localhost:5000/api/users/verify-otp',
-                        { phoneNumber: formData.phone, code },
-                        { headers: { Authorization: `Bearer ${token}` } }
-                    );
+                    await apiClient.post('/users/verify-otp', { phoneNumber: formData.phone, code });
                     setShowOtp(false);
                     setIsSaving(true);
-                    await finalProfileSave(token);
+                    await finalProfileSave();
                 }}
             />
         </div>

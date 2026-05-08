@@ -1,25 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, MessageSquare, Hash, Users, Lock, Rss, ChevronLeft, Check, UserPlus } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../utils/api'; // Replaced raw axios with your dynamic API client
 import { triggerHaptic } from '../utils/haptics';
 
 const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) => {
-    const [view, setView] = useState(initialMode); // 'menu', 'direct', 'channel', 'group', 'secret', 'broadcast'
+    const [view, setView] = useState(initialMode);
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
-    const token = localStorage.getItem('synced_token');
 
-    // Search & Selection State
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
     const [selectedUsers, setSelectedUsers] = useState([]);
 
-    // Channel / Secret State
     const [channelData, setChannelData] = useState({ name: '', description: '', avatar: '' });
     const [secretPassword, setSecretPassword] = useState('');
 
-    // --- DEBOUNCED AUTO-SEARCH ENGINE ---
+    // Debounced search via apiClient
     useEffect(() => {
         if (!searchQuery.trim()) {
             setSearchResults([]);
@@ -29,10 +26,7 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
         const delayDebounceFn = setTimeout(async () => {
             setIsSearching(true);
             try {
-                const res = await axios.get(`http://localhost:5000/api/users/search?q=${searchQuery}`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                // Filter out the current user!
+                const res = await apiClient.get(`/users/search?q=${searchQuery}`);
                 const filtered = res.data.filter(u => u._id !== currentUser.id && u._id !== currentUser._id);
                 setSearchResults(filtered);
             } catch (error) {
@@ -40,12 +34,11 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
             } finally {
                 setIsSearching(false);
             }
-        }, 400); // 400ms delay
+        }, 400);
 
         return () => clearTimeout(delayDebounceFn);
-    }, [searchQuery, token, currentUser.id, currentUser._id]);
+    }, [searchQuery, currentUser.id, currentUser._id]);
 
-    // --- RESET STATE ON CLOSE ---
     useEffect(() => {
         if (!isOpen) {
             setTimeout(() => {
@@ -61,12 +54,11 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
         }
     }, [isOpen, initialMode]);
 
-    // --- CREATION HANDLER ---
+    // Creation dispatcher via apiClient
     const handleCreate = async (targetUser = null) => {
         triggerHaptic('success');
         let payload = { type: view };
 
-        // Process Payload based on view type
         if (view === 'direct') {
             payload.targetUserIds = [targetUser._id];
         } else if (view === 'secret') {
@@ -87,16 +79,13 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
         }
 
         try {
-            const endpoint = view === 'broadcast' ? '/api/rooms/broadcast' : '/api/rooms/create';
-            const res = await axios.post(`http://localhost:5000${endpoint}`, payload, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const endpoint = view === 'broadcast' ? '/rooms/broadcast' : '/rooms/create';
+            const res = await apiClient.post(endpoint, payload);
 
-            // Pass the new/existing room back to the main app to route the user
             if (view !== 'broadcast') {
                 onRoomCreated(res.data.room);
             } else {
-                alert(res.data.message); // Tell user broadcast succeeded
+                alert(res.data.message);
             }
             onClose();
 
@@ -107,7 +96,6 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
         }
     };
 
-    // --- SUB-COMPONENTS FOR CLEAN UI ---
     const renderMenu = () => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[
@@ -181,14 +169,13 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
             <motion.div
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                 style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
-                onClick={onClose} // Close on background click
+                onClick={onClose}
             >
                 <motion.div
                     initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
-                    onClick={(e) => e.stopPropagation()} // Prevent close when clicking inside
+                    onClick={(e) => e.stopPropagation()}
                     style={{ width: '100%', maxWidth: '500px', backgroundColor: 'var(--bg-surface)', borderRadius: '24px', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh', boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}
                 >
-                    {/* Header */}
                     <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             {view !== 'menu' && (
@@ -209,11 +196,9 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
                         </button>
                     </div>
 
-                    {/* Body */}
                     <div style={{ padding: '20px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
                         {view === 'menu' && renderMenu()}
 
-                        {/* Search & Selection Mode (DM, Group, Broadcast, Secret) */}
                         {['direct', 'group', 'broadcast', 'secret'].includes(view) && (
                             <>
                                 {view === 'secret' && (
@@ -226,7 +211,6 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
                                     </div>
                                 )}
 
-                                {/* Selected Chips for Groups/Broadcasts */}
                                 {(view === 'group' || view === 'broadcast') && selectedUsers.length > 0 && (
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
                                         {selectedUsers.map(u => (
@@ -256,7 +240,6 @@ const NewChatModal = ({ isOpen, onClose, initialMode = 'menu', onRoomCreated }) 
                             </>
                         )}
 
-                        {/* Channel Creation Form */}
                         {view === 'channel' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                 <div>

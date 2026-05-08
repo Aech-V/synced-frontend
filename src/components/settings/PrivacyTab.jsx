@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Eye, ShieldAlert, UserX, ChevronRight, X, Search, Unlock, Ban, Clock, CheckCircle2, Loader2, ChevronDown, Check, MinusCircle } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
-// Helper to map main fields to their respective exclusion array fields in the DB
 const getExclusionField = (field) => {
     switch (field) {
         case 'lastSeen': return 'exclusionList';
@@ -15,9 +14,6 @@ const getExclusionField = (field) => {
     }
 };
 
-// ==========================================
-// REUSABLE CUSTOM DROPDOWN COMPONENT
-// ==========================================
 const PrivacyDropdownRow = ({ label, description, field, icon: Icon, value, onChange, onOpenExclusion }) => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -62,7 +58,6 @@ const PrivacyDropdownRow = ({ label, description, field, icon: Icon, value, onCh
                                         onClick={() => { 
                                             onChange(field, opt.id); 
                                             setIsOpen(false);
-                                            // Instantly open the manager if "except" is clicked
                                             if (opt.id === 'except') onOpenExclusion();
                                         }}
                                         style={{ padding: '12px 16px', fontSize: '0.85rem', color: opt.id === value ? 'var(--accent-primary)' : 'var(--text-primary)', cursor: 'pointer', backgroundColor: opt.id === value ? 'var(--bg-surface-hover)' : 'transparent', transition: 'background-color 0.2s', fontWeight: opt.id === value ? 'bold' : 'normal' }}
@@ -95,9 +90,6 @@ const PrivacyDropdownRow = ({ label, description, field, icon: Icon, value, onCh
     );
 };
 
-// ==========================================
-// MAIN PRIVACY TAB
-// ==========================================
 const PrivacyTab = () => {
     const user = JSON.parse(localStorage.getItem('synced_user')) || {};
     
@@ -112,7 +104,7 @@ const PrivacyTab = () => {
     });
     
     const [showBlockedManager, setShowBlockedManager] = useState(false);
-    const [exclusionConfig, setExclusionConfig] = useState(null); // { field, label }
+    const [exclusionConfig, setExclusionConfig] = useState(null); 
     const isMobile = useIsMobile();
 
     const updateBackend = async (field, value) => {
@@ -120,11 +112,7 @@ const PrivacyTab = () => {
         setPrivacySettings(newSettings); 
 
         try {
-            const token = localStorage.getItem('synced_token');
-            const response = await axios.put('http://localhost:5000/api/users/privacy', 
-                newSettings,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const response = await apiClient.put('/users/privacy', newSettings);
             
             triggerHaptic('light');
             if (field === 'profilePhoto') {
@@ -153,7 +141,6 @@ const PrivacyTab = () => {
                 <PrivacyDropdownRow label="Profile Photo" description="Who can see your avatar." field="profilePhoto" icon={Eye} value={privacySettings.profilePhoto} onChange={updateBackend} onOpenExclusion={() => openExclusionManager('profilePhoto', 'Profile Photo')} />
                 <PrivacyDropdownRow label="Groups" description="Who can add you to group chats without an invite link." field="groupAdds" icon={Users} value={privacySettings.groupAdds} onChange={updateBackend} onOpenExclusion={() => openExclusionManager('groupAdds', 'Groups')} />
 
-                {/* Read Receipts */}
                 <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                         <div style={{ marginTop: '2px', color: 'var(--text-secondary)' }}><CheckCircle2 size={18} /></div>
@@ -199,9 +186,6 @@ const PrivacyTab = () => {
     );
 };
 
-// ==========================================
-// EXCLUSION MANAGER MODAL
-// ==========================================
 const ExclusionManagerModal = ({ isMobile, config, currentList, onSave, onClose }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
@@ -211,8 +195,7 @@ const ExclusionManagerModal = ({ isMobile, config, currentList, onSave, onClose 
         setSearchQuery(query);
         if (query.length < 3) { setSearchResults([]); return; }
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get(`http://localhost:5000/api/users/search?q=${query}`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await apiClient.get(`/users/search?q=${query}`);
             setSearchResults(res.data);
         } catch (error) { console.error(error); }
     };
@@ -289,9 +272,6 @@ const ExclusionManagerModal = ({ isMobile, config, currentList, onSave, onClose 
     );
 };
 
-// ==========================================
-// BLOCKED CONTACTS MANAGER
-// ==========================================
 const BlockedContactsManager = ({ isMobile, onClose }) => {
     const [blockedList, setBlockedList] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -304,8 +284,7 @@ const BlockedContactsManager = ({ isMobile, onClose }) => {
 
     const fetchBlockedContacts = async () => {
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get('http://localhost:5000/api/users/blocked', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await apiClient.get('/users/blocked');
             setBlockedList(res.data);
             setLoading(false);
         } catch (error) { console.error("Failed to load blocked list", error); }
@@ -315,8 +294,7 @@ const BlockedContactsManager = ({ isMobile, onClose }) => {
         setSearchQuery(query);
         if (query.length < 3) { setSearchResults([]); return; }
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get(`http://localhost:5000/api/users/search?q=${query}`, { headers: { Authorization: `Bearer ${token}` } });
+            const res = await apiClient.get(`/users/search?q=${query}`);
             const filtered = res.data.filter(u => !blockedList.some(b => b.userId._id === u._id));
             setSearchResults(filtered);
         } catch (error) { console.error(error); }
@@ -324,8 +302,7 @@ const BlockedContactsManager = ({ isMobile, onClose }) => {
 
     const handleBlock = async (targetUserId) => {
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/block', { targetUserId }, { headers: { Authorization: `Bearer ${token}` } });
+            await apiClient.post('/users/block', { targetUserId });
             triggerHaptic('success');
             setSearchQuery('');
             setSearchResults([]);
@@ -336,8 +313,7 @@ const BlockedContactsManager = ({ isMobile, onClose }) => {
     const handleUnblock = async (targetUserId, username) => {
         if (!window.confirm(`Are you sure you want to unblock @${username}? They will be able to message and call you again.`)) return;
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/unblock', { targetUserId }, { headers: { Authorization: `Bearer ${token}` } });
+            await apiClient.post('/users/unblock', { targetUserId });
             triggerHaptic('success');
             setBlockedList(prev => prev.filter(b => b.userId._id !== targetUserId));
         } catch (error) { alert("Failed to unblock."); }

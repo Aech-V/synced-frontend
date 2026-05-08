@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Volume2, Mail, Moon, PhoneCall, Clock, ShieldAlert, Minus, Plus } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
 const NotificationsTab = () => {
     const user = JSON.parse(localStorage.getItem('synced_user')) || {};
 
-    // UI State
     const [settings, setSettings] = useState(user.notificationSettings || {
         push: true, email: false, messageSounds: true, callSounds: true,
         dnd: { isActive: false, until: null, scope: 'global' },
@@ -16,7 +15,7 @@ const NotificationsTab = () => {
     });
 
     const [dndInputHours, setDndInputHours] = useState(1);
-    const [dndMode, setDndMode] = useState('off'); // 'off', 'timer', 'indefinite'
+    const [dndMode, setDndMode] = useState('off'); 
     const [browserPermission, setBrowserPermission] = useState('default');
 
     const isMobile = useIsMobile();
@@ -30,7 +29,6 @@ const NotificationsTab = () => {
         }
     }, [settings.dnd]);
 
-    // Rule 15: Native Browser Permissions
     const requestPushPermission = async () => {
         if (!('Notification' in window)) return alert('Your browser does not support push notifications.');
         const permission = await Notification.requestPermission();
@@ -40,11 +38,7 @@ const NotificationsTab = () => {
 
     const updateBackend = async (newSettings) => {
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.put('http://localhost:5000/api/users/notifications',
-                { notificationSettings: newSettings },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await apiClient.put('/users/notifications', { notificationSettings: newSettings });
 
             triggerHaptic('light');
             const updatedUser = { ...user, notificationSettings: newSettings };
@@ -61,7 +55,6 @@ const NotificationsTab = () => {
         updateBackend(newSettings);
     };
 
-    // Rule 14: Manual Hour Input & Indefinite toggle
     const applyDND = (mode) => {
         let newDnd = { isActive: true, scope: settings.dnd.scope, until: null };
 
@@ -83,7 +76,6 @@ const NotificationsTab = () => {
         updateBackend(newSettings);
     };
 
-    // Sleek Stepper Controls
     const incrementTimer = () => setDndInputHours(prev => Math.min(prev + 1, 72));
     const decrementTimer = () => setDndInputHours(prev => Math.max(prev - 1, 1));
 
@@ -109,7 +101,6 @@ const NotificationsTab = () => {
         <div style={{ maxWidth: '650px', margin: '0 auto' }}>
             <h2 style={{ margin: '0 0 24px 0', color: 'var(--text-primary)', fontSize: '1.5rem' }}>Notifications & Sounds</h2>
 
-            {/* DO NOT DISTURB ENGINE */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', border: settings.dnd.isActive ? '1px solid var(--accent-primary)' : '1px solid var(--border-subtle)', borderRadius: '16px', padding: isMobile ? '16px' : '24px', marginBottom: '24px', transition: 'all 0.3s ease' }}>
                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginBottom: '20px' }}>
                     <div style={{ padding: '10px', backgroundColor: settings.dnd.isActive ? 'var(--accent-primary)' : 'var(--bg-primary)', borderRadius: '12px', transition: 'all 0.3s' }}>
@@ -123,7 +114,6 @@ const NotificationsTab = () => {
                     </div>
                 </div>
 
-                {/* Mobile Responsive Layout for DND Buttons */}
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '12px' }}>
                     <button
                         onClick={() => applyDND('off')}
@@ -139,7 +129,6 @@ const NotificationsTab = () => {
                         Until I turn it off
                     </button>
 
-                    {/* Sleek Custom Stepper Input */}
                     <div style={{ flex: isMobile ? 'none' : 1.2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 6px 6px 12px', borderRadius: '12px', border: dndMode === 'timer' ? '2px solid var(--accent-primary)' : '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-primary)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <button onClick={decrementTimer} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' }}><Minus size={16} /></button>
@@ -155,7 +144,6 @@ const NotificationsTab = () => {
                     </div>
                 </div>
 
-                {/* Improved Visual Hierarchy for Emergency Bypass */}
                 <div style={{ marginTop: '20px', padding: '14px 16px', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '12px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                     <ShieldAlert size={20} color="#ef4444" style={{ flexShrink: 0, marginTop: '2px' }} />
                     <div>
@@ -165,7 +153,6 @@ const NotificationsTab = () => {
                 </div>
             </div>
 
-            {/* QUIET HOURS */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', padding: '20px 16px', border: '1px solid var(--border-subtle)', marginBottom: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -198,7 +185,6 @@ const NotificationsTab = () => {
                 </AnimatePresence>
             </div>
 
-            {/* SPLIT TOGGLES & BROWSER PERMISSIONS */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
                 {browserPermission !== 'granted' && (
                     <div style={{ padding: '16px 20px', backgroundColor: 'rgba(239, 68, 68, 0.08)', borderBottom: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

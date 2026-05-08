@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Loader2, Trash2, RefreshCw, MessageSquare, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiClient } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
-import axios from 'axios';
 
-// Dynamic Scaling Utility
 const formatBytes = (bytes, decimals = 2) => {
     if (!+bytes) return '0 Bytes';
     const k = 1024;
@@ -28,10 +27,7 @@ const StorageTab = () => {
 
     const fetchStorageData = async () => {
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get('http://localhost:5000/api/users/storage', { 
-                headers: { Authorization: `Bearer ${token}` } 
-            });
+            const res = await apiClient.get('/users/storage');
             
             setStats(res.data);
             setLoading(false);
@@ -57,12 +53,11 @@ const StorageTab = () => {
     const handleClearCache = async () => {
         setClearingCache(true);
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/storage/clear', {}, { headers: { Authorization: `Bearer ${token}` } });
+            await apiClient.post('/users/storage/clear', {});
             
             triggerHaptic('success');
             setShowModal(false);
-            fetchStorageData(); // Refresh stats
+            fetchStorageData();
         } catch (error) {
             triggerHaptic('error');
             alert('Failed to clear cache.');
@@ -97,7 +92,6 @@ const StorageTab = () => {
             <h2 style={{ margin: '0 0 8px 0', color: 'var(--text-primary)' }}>Storage & Network</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '32px' }}>Manage device space and data usage.</p>
 
-            {/* STORAGE ENGINE CHART */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', marginBottom: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
                     <div>
@@ -106,7 +100,6 @@ const StorageTab = () => {
                     </div>
                 </div>
 
-                {/* 4-Color Segmented Bar */}
                 <div style={{ display: 'flex', width: '100%', height: '12px', backgroundColor: 'var(--bg-primary)', borderRadius: '6px', overflow: 'hidden', gap: '2px', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)' }}>
                     <motion.div initial={{ width: 0 }} animate={{ width: `${vPct}%` }} transition={{ duration: 1, type: 'spring' }} style={{ backgroundColor: '#3b82f6' }} title="Videos" />
                     <motion.div initial={{ width: 0 }} animate={{ width: `${pPct}%` }} transition={{ duration: 1, type: 'spring', delay: 0.1 }} style={{ backgroundColor: '#8b5cf6' }} title="Photos" />
@@ -114,7 +107,6 @@ const StorageTab = () => {
                     <motion.div initial={{ width: 0 }} animate={{ width: `${dPct}%` }} transition={{ duration: 1, type: 'spring', delay: 0.3 }} style={{ backgroundColor: '#10b981' }} title="Documents" />
                 </div>
 
-                {/* Legend - Responsive Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '16px', marginTop: '24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
@@ -140,7 +132,6 @@ const StorageTab = () => {
                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '12px', margin: 0 }}>Frees up space. Media remains safely in the cloud.</p>
             </div>
 
-            {/* CHAT BREAKDOWN */}
             <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '32px 0 12px 16px', fontWeight: 'bold' }}>Top Chats</h3>
             
             {topRooms.length === 0 ? (
@@ -163,7 +154,6 @@ const StorageTab = () => {
                 </div>
             )}
 
-            {/* NETWORK SETTINGS */}
             <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '32px 0 12px 16px', fontWeight: 'bold' }}>Network Usage</h3>
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
                 <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -193,7 +183,6 @@ const StorageTab = () => {
                 </div>
             </div>
 
-            {/* CLEAR CACHE MODAL */}
             <AnimatePresence>
                 {showModal && (
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>

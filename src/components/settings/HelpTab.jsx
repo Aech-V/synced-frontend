@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HelpCircle, Info, MessageSquare, Search, ChevronDown, ChevronUp, Send, Paperclip, CheckCircle } from 'lucide-react';
-import axios from 'axios';
+import { apiClient } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
@@ -17,11 +17,9 @@ const HelpTab = () => {
     const user = JSON.parse(localStorage.getItem('synced_user')) || {};
     const [activeSection, setActiveSection] = useState('faq');
     
-    // FAQ State
     const [searchQuery, setSearchQuery] = useState('');
     const [openFaqId, setOpenFaqId] = useState(null);
 
-    // Form State
     const [formData, setFormData] = useState({ subject: '', category: '', priority: 'Normal', message: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -29,7 +27,6 @@ const HelpTab = () => {
 
     const isMobile = useIsMobile();
 
-    // Auto-capture device telemetry on mount
     useEffect(() => {
         setDeviceInfo({
             userAgent: navigator.userAgent,
@@ -47,11 +44,7 @@ const HelpTab = () => {
         setIsSubmitting(true);
         
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/support', 
-                { ...formData, deviceInfo, attachments: [] }, 
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await apiClient.post('/users/support', { ...formData, deviceInfo, attachments: [] });
             
             triggerHaptic('success');
             setSubmitSuccess(true);
@@ -76,7 +69,6 @@ const HelpTab = () => {
         <div style={{ maxWidth: '650px', margin: '0 auto', position: 'relative' }}>
             <h2 style={{ margin: '0 0 24px 0', color: 'var(--text-primary)', fontSize: '1.5rem' }}>Help Center</h2>
 
-            {/* Premium Animated Segmented Navigation */}
             <div style={{ display: 'flex', backgroundColor: 'var(--bg-surface-hover)', padding: '6px', borderRadius: '16px', border: '1px solid var(--border-subtle)', marginBottom: '32px', position: 'relative' }}>
                 {TABS.map((tab) => {
                     const isActive = activeSection === tab.id;
@@ -103,7 +95,6 @@ const HelpTab = () => {
             </div>
 
             <AnimatePresence mode="wait">
-                {/* 1. FAQs SECTION */}
                 {activeSection === 'faq' && (
                     <motion.div key="faq" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
                         <div style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-primary)', padding: '14px 16px', borderRadius: '12px', border: '1px solid var(--border-subtle)', marginBottom: '24px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}>
@@ -143,7 +134,6 @@ const HelpTab = () => {
                     </motion.div>
                 )}
 
-                {/* 2. CONTACT SUPPORT SECTION */}
                 {activeSection === 'contact' && (
                     <motion.div key="contact" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} style={{ maxWidth: '500px', margin: '0 auto' }}>
                         {submitSuccess ? (
@@ -201,12 +191,10 @@ const HelpTab = () => {
                     </motion.div>
                 )}
 
-                {/* 3. APP INFO SECTION */}
                 {activeSection === 'info' && (
                     <motion.div key="info" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }} style={{ maxWidth: '400px', margin: '0 auto' }}>
                         <div style={{ backgroundColor: 'var(--bg-surface-hover)', padding: '48px 32px', borderRadius: '24px', border: '1px solid var(--border-subtle)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.1)' }}>
                             
-                            {/* Premium 3D App Icon */}
                             <div style={{ width: '88px', height: '88px', background: 'linear-gradient(135deg, var(--bg-surface-hover) 0%, var(--bg-primary) 100%)', borderRadius: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', border: '1px solid var(--border-subtle)', boxShadow: '0 8px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)' }}>
                                 <span style={{ fontSize: '2.5rem', fontWeight: '800', color: 'var(--text-primary)', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>S</span>
                             </div>

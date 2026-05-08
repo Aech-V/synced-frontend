@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import axios from 'axios';
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Video } from 'lucide-react';
+import { apiClient } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
 
 const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
@@ -11,10 +11,7 @@ const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
     useEffect(() => {
         const fetchCalls = async () => {
             try {
-                const token = localStorage.getItem('synced_token');
-                const response = await axios.get('http://localhost:5000/api/calls/history?page=1', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const response = await apiClient.get('/calls/history?page=1');
                 if (response.data.success) {
                     setCallLogs(response.data.data);
                 }
@@ -25,7 +22,7 @@ const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
         fetchCalls();
     }, []);
 
-    // --- PREMIUM BULLETPROOF IDENTITY ENGINE ---
+    // Premium bulletproof identity engine
     const groupedCalls = useMemo(() => {
         const grouped = [];
         let currentGroup = null;
@@ -33,99 +30,97 @@ const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
         callLogs.forEach((call) => {
             const isOutgoing = (call.callerId?._id || call.callerId) === currentUserId;
             
-            // 1. Unbreakable Identity Extraction
-            let otherUser = null;
-            if (isOutgoing) {
-                // If I called them, extract the target from participants
-                otherUser = call.participants?.find(p => (p.userId?._id || p.userId) !== currentUserId)?.userId;
-                if (!otherUser && call.participants?.length > 0) otherUser = call.participants[0].userId;
+            let identityId;
+            let displayUser;
+
+            if (call.participants && call.participants.length > 1 && call.roomId?.type !== 'direct') {
+                identityId = call.roomId?._id || 'group';
+                displayUser = { username: call.roomId?.name || 'Group Call', avatar: null };
             } else {
-                // If they called me, extract them from callerId
-                otherUser = call.callerId;
+                if (isOutgoing) {
+                    const receiver = call.participants && call.participants[0] ? call.participants[0].userId : null;
+                    identityId = receiver?._id || receiver;
+                    displayUser = receiver;
+                } else {
+                    identityId = call.callerId?._id || call.callerId;
+                    displayUser = call.callerId;
+                }
             }
 
-            // 2. Fallback Formatting
-            let displayName = 'Unknown Contact';
-            if (otherUser && otherUser.username) {
-                displayName = otherUser.username;
-            } else if (call.roomId && call.roomId.name) {
-                // Prevent UUIDs from leaking into the UI
-                const isUUID = call.roomId.name.length > 20 && call.roomId.name.includes('-');
-                if (!isUUID) displayName = call.roomId.name;
-            }
+            const callData = {
+                _id: call._id,
+                type: call.type,
+                status: call.status,
+                duration: call.duration,
+                createdAt: call.createdAt,
+                isOutgoing
+            };
 
-            const identityId = otherUser?._id || (call.roomId ? call.roomId._id : null);
-            const avatar = otherUser?.avatar || `https://ui-avatars.com/api/?name=${displayName}&background=random`;
-            
-            // 3. Formatted Sub-Call Payload
-            const exactTime = new Date(call.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const direction = isOutgoing ? 'outgoing' : (call.status === 'missed' || call.status === 'declined' ? 'missed' : 'incoming');
-            const durationFormatted = call.duration ? `${Math.floor(call.duration / 60)}m ${call.duration % 60}s` : null;
-
-            const subCall = { direction, type: call.type, exactTime, duration: durationFormatted };
-
-            if (currentGroup && currentGroup.identityId === identityId && currentGroup.type === call.type && currentGroup.isOutgoing === isOutgoing) {
-                currentGroup.attemptCount += 1;
-                currentGroup.subCalls.push(subCall);
+            if (currentGroup && currentGroup.identityId === identityId) {
+                currentGroup.calls.push(callData);
             } else {
                 if (currentGroup) grouped.push(currentGroup);
-                
                 currentGroup = {
-                    ...call,
                     identityId,
-                    contactName: displayName,
-                    avatar,
-                    isOutgoing,
-                    isMissed: direction === 'missed',
-                    attemptCount: 1,
-                    subCalls: [subCall],
-                    timestamp: exactTime
+                    displayUser,
+                    roomId: call.roomId,
+                    type: call.type,
+                    calls: [callData]
                 };
             }
         });
+
         if (currentGroup) grouped.push(currentGroup);
         return grouped;
     }, [callLogs, currentUserId]);
 
-    return (
-        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
-            {groupedCalls.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', marginTop: '40px', fontSize: '0.95rem' }}>No recent calls</div>
-            ) : (
-                groupedCalls.map((group, idx) => (
-                    <div 
-                        key={idx} 
-                        onClick={() => { triggerHaptic('light'); setActiveCallDetails && setActiveCallDetails(group); }}
-                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', borderRadius: '16px', cursor: 'pointer', transition: 'background-color 0.2s' }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-surface-hover)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: 0 }}>
-                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', flexShrink: 0, position: 'relative' }}>
-                                <img src={group.avatar} alt={group.contactName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                            </div>
-                            
-                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <span style={{ color: group.isMissed ? '#ef4444' : 'var(--text-primary)', fontWeight: '700', fontSize: '1.05rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {group.contactName}
-                                    </span>
-                                    {group.attemptCount > 1 && (
-                                        <span style={{ backgroundColor: 'var(--bg-surface-hover)', padding: '2px 6px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-secondary)' }}>
-                                            {group.attemptCount}
-                                        </span>
-                                    )}
-                                </div>
+    const renderCallIcon = (status, isOutgoing) => {
+        if (status === 'missed' && !isOutgoing) return <PhoneMissed size={16} color="#ef4444" />;
+        if (status === 'declined') return <PhoneMissed size={16} color="#ef4444" />;
+        if (isOutgoing) return <PhoneOutgoing size={16} color="var(--text-secondary)" />;
+        return <PhoneIncoming size={16} color="var(--text-secondary)" />;
+    };
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px', fontWeight: '500' }}>
-                                    {group.isOutgoing 
-                                        ? <PhoneOutgoing size={14} color="var(--text-secondary)" /> 
-                                        : (group.isMissed ? <PhoneMissed size={14} color="#ef4444"/> : <PhoneIncoming size={14} color="#10b981" />)}
-                                    {group.timestamp}
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px' }}>
+            {groupedCalls.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px 20px' }}>
+                    <Phone size={48} opacity={0.2} style={{ marginBottom: '16px' }} />
+                    <p>Your call history is empty.</p>
+                </div>
+            ) : (
+                groupedCalls.map((group, index) => (
+                    <div 
+                        key={index}
+                        onClick={() => {
+                            triggerHaptic('light');
+                            setActiveCallDetails(group);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', backgroundColor: 'var(--bg-primary)', borderRadius: '16px', cursor: 'pointer', transition: 'background-color 0.2s' }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-surface-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', overflow: 'hidden' }}>
+                            <div style={{ position: 'relative', flexShrink: 0 }}>
+                                <img 
+                                    src={group.displayUser?.avatar || `https://ui-avatars.com/api/?name=${group.displayUser?.username || 'G'}&background=random`} 
+                                    alt="Avatar" 
+                                    style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} 
+                                />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                <span style={{ color: group.calls[0].status === 'missed' && !group.calls[0].isOutgoing ? '#ef4444' : 'var(--text-primary)', fontWeight: '600', fontSize: '1.05rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                                    {group.displayUser?.username || 'Unknown User'}
+                                    {group.calls.length > 1 && <span style={{ color: 'var(--text-secondary)', fontWeight: 'normal', marginLeft: '6px' }}>({group.calls.length})</span>}
+                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px' }}>
+                                    {renderCallIcon(group.calls[0].status, group.calls[0].isOutgoing)}
+                                    <span>{group.calls[0].type === 'video' ? 'Video' : 'Voice'}</span>
+                                    <span>•</span>
+                                    <span>{new Date(group.calls[0].createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
                             </div>
                         </div>
-                        
                         <button 
                             onClick={(e) => {
                                 e.stopPropagation(); 

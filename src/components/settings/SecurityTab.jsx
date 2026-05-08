@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Fingerprint, Laptop, Smartphone, Trash2, ShieldCheck, Lock, LogOut, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { apiClient } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
 import { startRegistration } from '@simplewebauthn/browser';
 import { QRCodeSVG } from 'qrcode.react';
-import axios from 'axios';
 
-// Reusable 6-Box OTP Input Component
 const OTPInput = ({ value, onChange }) => {
     const inputs = useRef([]);
     const [otp, setOtp] = useState(new Array(6).fill(''));
@@ -51,7 +50,7 @@ const OTPInput = ({ value, onChange }) => {
 
 const SecurityTab = () => {
     const user = JSON.parse(localStorage.getItem('synced_user')) || {};
-    const currentSessionId = localStorage.getItem('synced_session_id'); // Assume saved during login
+    const currentSessionId = localStorage.getItem('synced_session_id');
 
     const [sessions, setSessions] = useState([]);
     const [loadingSessions, setLoadingSessions] = useState(true);
@@ -66,8 +65,7 @@ const SecurityTab = () => {
 
     const fetchSessions = async () => {
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get('http://localhost:5000/api/users/sessions', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await apiClient.get('/users/sessions');
             setSessions(res.data);
         } catch (error) { 
             console.error("Failed to fetch sessions"); 
@@ -79,16 +77,14 @@ const SecurityTab = () => {
     const handleWebAuthnRegistration = async () => {
         try {
             triggerHaptic('light');
-            const token = localStorage.getItem('synced_token');
             const targetUserId = user._id || user.id; 
             
             if (!targetUserId) return alert("User session is corrupted. Please log out and log back in.");
 
-            const optionsResp = await axios.get(`http://localhost:5000/api/auth/webauthn/generate-registration?userId=${targetUserId}`, { headers: { Authorization: `Bearer ${token}` } });
+            const optionsResp = await apiClient.get(`/auth/webauthn/generate-registration?userId=${targetUserId}`);
             const attResp = await startRegistration({ optionsJSON: optionsResp.data });
-            await axios.post('http://localhost:5000/api/auth/webauthn/verify-registration', { userId: targetUserId, registrationResponse: attResp }, { headers: { Authorization: `Bearer ${token}` } });
+            await apiClient.post('/auth/webauthn/verify-registration', { userId: targetUserId, registrationResponse: attResp });
             
-            // --- THE FIX: Update state and local storage on success ---
             triggerHaptic('success');
             setHasPasskey(true);
             const updatedUser = { ...user, hasPasskey: true };
@@ -104,8 +100,7 @@ const SecurityTab = () => {
 
     const init2FASetup = async () => {
         try {
-            const token = localStorage.getItem('synced_token');
-            const res = await axios.get('http://localhost:5000/api/users/security/2fa/setup', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await apiClient.get('/users/security/2fa/setup');
             setSetup2FA({ active: true, qrUrl: res.data.otpauthUrl, code: '' });
         } catch (error) { alert("Failed to initialize 2FA"); }
     };
@@ -113,11 +108,7 @@ const SecurityTab = () => {
     const confirm2FASetup = async () => {
         if (setup2FA.code.length !== 6) return;
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/security/2fa/enable',
-                { otp: setup2FA.code },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await apiClient.post('/users/security/2fa/enable', { otp: setup2FA.code });
 
             triggerHaptic('success');
             const updatedUser = { ...user, twoFactorEnabled: true };
@@ -136,11 +127,7 @@ const SecurityTab = () => {
         if (!code || code.length !== 6) return;
 
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/security/2fa/disable',
-                { otp: code },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await apiClient.post('/users/security/2fa/disable', { otp: code });
 
             triggerHaptic('success');
             const updatedUser = { ...user, twoFactorEnabled: false };
@@ -162,11 +149,7 @@ const SecurityTab = () => {
         }
 
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.put('http://localhost:5000/api/users/security/app-lock',
-                { enabled: newState, pin: user.appLock?.pin },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await apiClient.put('/users/security/app-lock', { enabled: newState, pin: user.appLock?.pin });
 
             triggerHaptic('light');
             setAppLockEnabled(newState);
@@ -180,8 +163,7 @@ const SecurityTab = () => {
     const handleRevokeSession = async (sessionId) => {
         if (!window.confirm("Are you sure you want to log out this device?")) return;
         try {
-            const token = localStorage.getItem('synced_token');
-            await axios.delete(`http://localhost:5000/api/users/sessions/${sessionId}`, { headers: { Authorization: `Bearer ${token}` } });
+            await apiClient.delete(`/users/sessions/${sessionId}`);
             triggerHaptic('success');
             setSessions(sessions.filter(s => s.sessionId !== sessionId));
         } catch (error) { alert("Failed to revoke session"); }
@@ -191,8 +173,7 @@ const SecurityTab = () => {
         if (!window.confirm("This will log you out of ALL other devices. Continue?")) return;
         try {
             setLoadingSessions(true);
-            const token = localStorage.getItem('synced_token');
-            await axios.post('http://localhost:5000/api/users/sessions/revoke-all', { currentSessionId }, { headers: { Authorization: `Bearer ${token}` } });
+            await apiClient.post('/users/sessions/revoke-all', { currentSessionId });
             triggerHaptic('success');
             fetchSessions();
         } catch (error) { 
@@ -208,7 +189,6 @@ const SecurityTab = () => {
 
             <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', margin: '32px 0 12px 16px', fontWeight: 'bold' }}>Authentication</h3>
 
-            {/* Passkeys Engine */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                     <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: hasPasskey ? '#10b981' : 'var(--text-primary)', transition: 'color 0.3s', flexShrink: 0 }}>
@@ -231,15 +211,13 @@ const SecurityTab = () => {
                 </div>
             </div>
 
-            {/* 2FA Engine */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border-subtle)', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}> {/* Changed to flex-start */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                     <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: twoFAEnabled ? '#10b981' : 'var(--text-secondary)', transition: 'color 0.3s', flexShrink: 0 }}>
                         <ShieldCheck size={24} />
                     </div>
-                    {/* ADDED flexWrap: 'wrap' and gap: '12px' HERE */}
                     <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center', marginTop: '2px' }}>
-                        <div style={{ minWidth: '120px' }}> {/* Ensures text doesn't get crushed */}
+                        <div style={{ minWidth: '120px' }}>
                             <h3 style={{ margin: '0 0 4px 0', color: 'var(--text-primary)', fontSize: '1.05rem' }}>Two-Factor Auth</h3>
                             <p style={{ margin: '0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Use an Authenticator app.</p>
                         </div>
@@ -254,7 +232,6 @@ const SecurityTab = () => {
                     </div>
                 </div>
 
-                {/* 2FA Setup Wizard */}
                 <AnimatePresence>
                     {setup2FA.active && (
                         <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
@@ -275,7 +252,6 @@ const SecurityTab = () => {
                 </AnimatePresence>
             </div>
 
-            {/* App Lock Config */}
             <div style={{ backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', padding: '16px', border: '1px solid var(--border-subtle)', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: appLockEnabled ? 'var(--accent-primary)' : 'var(--text-secondary)', transition: 'color 0.3s' }}>
                     <Lock size={24} />
@@ -301,7 +277,6 @@ const SecurityTab = () => {
                 </div>
             </div>
 
-            {/* Active Sessions UI */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '32px 0 12px 16px' }}>
                 <h3 style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 'bold', margin: 0 }}>Active Devices</h3>
                 {sessions.length > 1 && (

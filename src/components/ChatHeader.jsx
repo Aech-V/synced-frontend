@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, Phone, Video, MoreVertical, Search } from 'lucide-react';
 import { useFloating, useClick, useDismiss, useInteractions, offset, flip, shift, FloatingPortal } from '@floating-ui/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { triggerHaptic } from '../utils/haptics';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { apiClient } from '../utils/api';
 
 const ChatHeader = ({ currentRoom, roomObj, isOnline, onGlobalAction, isTyping, rtc, onCloseMobileChat, onOpenProfile, onOpenSearch }) => {
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
@@ -54,7 +55,6 @@ const ChatHeader = ({ currentRoom, roomObj, isOnline, onGlobalAction, isTyping, 
     return (
         <div style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 24px', backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-subtle)', height: '72px', flexShrink: 0 }}>
 
-            {/* User Profile Hook */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
                 {isMobile && (
                     <button onClick={onCloseMobileChat} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', padding: '0 4px 0 0', display: 'flex', alignItems: 'center' }}>
@@ -76,9 +76,7 @@ const ChatHeader = ({ currentRoom, roomObj, isOnline, onGlobalAction, isTyping, 
                 </div>
             </div>
 
-            {/* Action Group */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-
                 <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-surface-hover)', padding: '4px', borderRadius: '12px' }}>
                     <button onClick={() => handleCallClick('voice')} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', padding: '8px', borderRadius: '8px', transition: 'background-color 0.2s' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-surface)'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
                         <Phone size={18} strokeWidth={2.5} />
@@ -106,34 +104,21 @@ const ChatHeader = ({ currentRoom, roomObj, isOnline, onGlobalAction, isTyping, 
                                             {isGroup ? 'Group Info' : 'Contact Info'}
                                         </button>
                                         <button
-                                            // FIX: Attached the API execution engine to clear the room history
                                             onClick={async () => {
                                                 setIsMenuOpen(false);
                                                 const isConfirmed = window.confirm("Are you sure you want to clear your history for this chat? This action cannot be undone.");
 
                                                 if (isConfirmed && roomObj?._id) {
                                                     try {
-                                                        // Fallback token extraction to ensure authentication passes
-                                                        const token = currentUser?.token || localStorage.getItem('synced_token') || '';
-                                                        const baseUrl = window.location.origin.includes('localhost') ? 'http://localhost:5000/api' : '/api';
-
-                                                        const response = await fetch(`${baseUrl}/rooms/${roomObj._id}/clearHistory`, {
-                                                            method: 'PUT',
-                                                            headers: {
-                                                                'Content-Type': 'application/json',
-                                                                'Authorization': `Bearer ${token}`
-                                                            }
-                                                        });
-
-                                                        if (response.ok) {
+                                                        const response = await apiClient.put(`/rooms/${roomObj._id}/clearHistory`);
+                                                        
+                                                        if (response.data.success) {
                                                             triggerHaptic('success');
-                                                            // FIX: Instead of reloading the page, emit a command to wipe the local state
                                                             if (onGlobalAction) onGlobalAction('CLEAR_HISTORY');
-                                                        } else {
-                                                            alert("Failed to clear history. Please try again.");
                                                         }
                                                     } catch (error) {
                                                         console.error("Clear History Error:", error);
+                                                        alert("Failed to clear history. Please try again.");
                                                     }
                                                 }
                                             }}

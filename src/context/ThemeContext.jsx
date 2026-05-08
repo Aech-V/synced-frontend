@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import { apiClient } from '../utils/api';
 
 const ThemeContext = createContext();
 export const useTheme = () => useContext(ThemeContext);
@@ -29,50 +29,51 @@ export const ThemeProvider = ({ children }) => {
         let activeTheme = appearance.theme;
         if (appearance.theme === 'system') activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         setResolvedTheme(activeTheme);
-        root.setAttribute('data-theme', activeTheme);
 
-        root.style.setProperty('--font-scale', appearance.fontScale);
+        const colors = {
+            light: { bg: '#f9fafb', surface: '#ffffff', surfaceHover: '#f3f4f6', text: '#111827', textSec: '#6b7280', border: '#e5e7eb' },
+            dark: { bg: '#111827', surface: '#1f2937', surfaceHover: '#374151', text: '#f9fafb', textSec: '#9ca3af', border: '#374151' },
+            oled: { bg: '#000000', surface: '#0a0a0a', surfaceHover: '#1a1a1a', text: '#f9fafb', textSec: '#9ca3af', border: '#262626' }
+        };
+
+        const themeColors = appearance.highContrast ? 
+            (activeTheme.includes('dark') || activeTheme === 'oled' ? { ...colors[activeTheme], textSec: '#d1d5db', border: '#4b5563' } : { ...colors.light, textSec: '#374151', border: '#d1d5db' }) 
+            : colors[activeTheme];
+
+        root.style.setProperty('--bg-primary', themeColors.bg);
+        root.style.setProperty('--bg-surface', themeColors.surface);
+        root.style.setProperty('--bg-surface-hover', themeColors.surfaceHover);
+        root.style.setProperty('--text-primary', themeColors.text);
+        root.style.setProperty('--text-secondary', themeColors.textSec);
+        root.style.setProperty('--border-subtle', themeColors.border);
+
+        root.style.setProperty('--base-font-size', `${appearance.fontScale}%`);
         
-        const radii = { classic: '8px', rounded: '20px', squircle: '24px' };
-        root.style.setProperty('--bubble-radius', radii[appearance.bubbleShape] || '20px');
-        
-        root.setAttribute('data-high-contrast', appearance.highContrast);
-        root.setAttribute('data-transparent-bubbles', appearance.bubbleTransparency);
-        root.setAttribute('data-reduced-motion', appearance.reducedMotion);
+        let fontString = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        if (appearance.fontFamily === 'rounded') fontString = 'ui-rounded, "SF Pro Rounded", system-ui, sans-serif';
+        if (appearance.fontFamily === 'mono') fontString = 'ui-monospace, "SF Mono", Menlo, monospace';
+        root.style.setProperty('--font-family', fontString);
 
-        if (localWallpaper) {
-            root.style.setProperty('--chat-bg-image', `url(${localWallpaper})`);
-            const dimColor = activeTheme === 'light' ? '255,255,255' : '0,0,0';
-            root.style.setProperty('--chat-bg-dim', `rgba(${dimColor}, ${appearance.wallpaperDimming / 100})`);
-        } else {
-            root.style.setProperty('--chat-bg-image', 'none');
-            root.style.setProperty('--chat-bg-dim', 'transparent');
-        }
-
-        if (appearance.fontFamily !== 'system') {
-            const fontLink = document.getElementById('dynamic-google-font');
-            if (!fontLink) {
-                const link = document.createElement('link'); link.id = 'dynamic-google-font'; link.rel = 'stylesheet';
-                link.href = `https://fonts.googleapis.com/css2?family=${appearance.fontFamily.replace(' ', '+')}&display=swap`;
-                document.head.appendChild(link);
-            } else fontLink.href = `https://fonts.googleapis.com/css2?family=${appearance.fontFamily.replace(' ', '+')}&display=swap`;
-            root.style.setProperty('--active-font', `"${appearance.fontFamily}", sans-serif`);
-        } else root.style.setProperty('--active-font', 'system-ui, -apple-system, sans-serif');
+        root.style.setProperty('--bubble-radius', appearance.bubbleShape === 'pill' ? '24px' : appearance.bubbleShape === 'square' ? '8px' : '16px');
 
         localStorage.setItem('synced_appearance', JSON.stringify(appearance));
-        if (localWallpaper) localStorage.setItem('synced_chat_wallpaper', localWallpaper);
-
-    }, [appearance, localWallpaper]);
+    }, [appearance]);
 
     useEffect(() => {
-        if (!appearance.parallaxEffects || appearance.reducedMotion) return;
-        const handleOrientation = (event) => {
-            const root = document.documentElement;
-            const shiftX = Math.max(-15, Math.min(15, event.gamma / 3)); 
-            const shiftY = Math.max(-15, Math.min(15, (event.beta - 45) / 3));
-            root.style.setProperty('--parallax-x', `${shiftX}px`);
-            root.style.setProperty('--parallax-y', `${shiftY}px`);
+        if (!appearance.parallaxEffects || appearance.reducedMotion) {
+            document.documentElement.style.setProperty('--bg-offset-x', '0px');
+            document.documentElement.style.setProperty('--bg-offset-y', '0px');
+            return;
+        }
+
+        const handleOrientation = (e) => {
+            const x = Math.min(Math.max(e.gamma, -30), 30); 
+            const y = Math.min(Math.max(e.beta, -30), 30);
+            
+            document.documentElement.style.setProperty('--bg-offset-x', `${x * -0.5}px`);
+            document.documentElement.style.setProperty('--bg-offset-y', `${y * -0.5}px`);
         };
+
         window.addEventListener('deviceorientation', handleOrientation);
         return () => window.removeEventListener('deviceorientation', handleOrientation);
     }, [appearance.parallaxEffects, appearance.reducedMotion]);
@@ -82,21 +83,18 @@ export const ThemeProvider = ({ children }) => {
     useEffect(() => {
         const currentStringified = JSON.stringify(appearance);
         
-        // Block redundant network pings if the exact same state was already synced
         if (lastSyncedRef.current === currentStringified) return;
 
         const syncTimeout = setTimeout(async () => {
             try {
+                // Ensure a user is actually logged in before attempting to sync preferences
                 const token = localStorage.getItem('synced_token');
                 if (token) {
-                    await axios.put('http://localhost:5000/api/users/appearance', appearance, { 
-                        headers: { Authorization: `Bearer ${token}` } 
-                    });
-                    // Only update the ref if the network call was a success
+                    await apiClient.put('/users/appearance', appearance);
                     lastSyncedRef.current = currentStringified;
                 }
             } catch (error) { 
-                // Silent catch: Prevents console flooding if the user momentarily loses WiFi
+                // Silent catch to prevent console flooding on minor network drops
             }
         }, 1500);
         
