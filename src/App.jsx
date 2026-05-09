@@ -220,7 +220,7 @@ const App = () => {
 
       const optimisticMsg = {
         ...socketPayload,
-        _id: tempId,
+        _id: tempId, // Temporary ID
         senderId: currentUserId,
         senderName: currentUserObj.username,
         status: 'sending',
@@ -228,15 +228,17 @@ const App = () => {
         createdAt: new Date().toISOString()
       };
 
-      addOptimistic(currentRoom, optimisticMsg);
+      setChatHistory(prev => [...prev, optimisticMsg]);
 
       socket.emit('send_message', socketPayload, (ack) => {
         if (ack && ack.success) {
-          const confirmedMsg = { ...optimisticMsg, _id: ack.messageId, status: 'sent' };
-          setChatHistory(prev => [...prev, confirmedMsg]);
-          removeOptimistic(currentRoom, tempId);
+          setChatHistory(prev => prev.map(msg => 
+              msg._id === tempId 
+                  ? { ...msg, _id: ack.messageId, status: 'sent' } 
+                  : msg
+          ));
         } else {
-          removeOptimistic(currentRoom, tempId);
+          setChatHistory(prev => prev.filter(msg => msg._id !== tempId));
           alert("Failed to send message. Please check your network.");
         }
       });
