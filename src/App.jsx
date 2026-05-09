@@ -1,22 +1,23 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef } from "react";
 import io from "socket.io-client";
-import { AnimatePresence, motion } from "framer-motion";
+import axios from "axios";
 import Auth from "./Auth";
+import { AnimatePresence, motion } from "framer-motion";
 import ChatListPane from "./components/chat-list/ChatListPane";
 import ActiveConversationPane from "./components/ActiveConversationPane";
 import GlobalNav from "./components/GlobalNav";
 import NewChatModal from "./components/NewChatModal";
 import ActiveCallModal from './components/ActiveCallModal';
 import CallDetailsPane from "./components/CallDetailsPane";
+import { uploadMediaFile, resolveDirectMessage } from './utils/api';
+import { useWebRTC } from './hooks/useWebRTC';
 import VaultModal from "./components/VaultModal";
 import ForwardModal from "./components/ForwardModal";
 import CallSelectionModal from "./components/CallSelectionModal";
 import { CheckCircle2, MessageSquare, Phone, Radio, Hash } from 'lucide-react';
-import { uploadMediaFile, resolveDirectMessage, apiClient } from './utils/api';
-import { useWebRTC } from './hooks/useWebRTC';
+import { apiClient } from './utils/api';
 import { useIsMobile } from './hooks/useMediaQuery';
 import { useChatStore } from '../store/useChatStore';
-import { useSocketEvents } from './hooks/useSocketEvents';
 
 // --- PREMIUM NATIVE EMPTY STATE ENGINE ---
 const EmptyWorkspace = ({ icon: Icon, title, subtitle, action, actionText }) => (
@@ -70,10 +71,6 @@ const App = () => {
   const [isTyping, setIsTyping] = useState(false);
   const isMobile = useIsMobile();
 
-  const optimisticMessages = useChatStore((state) => state.optimisticMessages);
-  const addOptimistic = useChatStore((state) => state.addOptimisticMessage);
-  const removeOptimistic = useChatStore((state) => state.removeOptimisticMessage);
-
   const storedUser = localStorage.getItem('synced_user');
   const currentUserObj = storedUser && storedUser !== 'undefined' ? JSON.parse(storedUser) : {};
   const currentUserId = currentUserObj.id || currentUserObj._id;
@@ -87,20 +84,21 @@ const App = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [callModalAction, setCallModalAction] = useState(null);
 
-  const searchInputRef = useRef(null);
+  // --- CRITICAL FIX: REFS TO PREVENT STALE CLOSURES ---
+  const currentUserIdRef = useRef(currentUserId);
+  useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
 
-  // --- ZUSTAND OPTIMISTIC UI MERGE ---
-  const mergedMessages = useMemo(() => {
-    const pending = optimisticMessages[currentRoom] || [];
-    return [...chatHistory, ...pending];
-  }, [chatHistory, optimisticMessages, currentRoom]);
+  const roomsRef = useRef(availableRooms);
+  useEffect(() => { roomsRef.current = availableRooms; }, [availableRooms]);
 
-  // --- SOCKET EVENT DELEGATION ---
-  useSocketEvents(socket, currentRoom, currentUserId, currentUserObj, setChatHistory, setAvailableRooms, setIsTyping);
+  const currentRoomRef = useRef(currentRoom);
+  useEffect(() => { currentRoomRef.current = currentRoom; }, [currentRoom]);
 
   useEffect(() => {
     if (activeNav !== 'Calls') setActiveCallDetails(null);
   }, [activeNav]);
+
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -118,6 +116,7 @@ const App = () => {
         openModal('group');
       }
     };
+
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
@@ -140,24 +139,20 @@ const App = () => {
 
   useEffect(() => {
     if (!token) return;
-    
-    const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
-    const socketUrl = rawApiUrl.replace('/api', '');
-    const newSocket = io(socketUrl, { auth: { token: token }, transports: ['polling', 'websocket'] });
+    const newSocket = io(import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : "http://localhost:5000", { auth: { token: token } });
 
     newSocket.on("connect_error", (err) => {
       if (err.message.includes("Authentication") || err.message.includes("token")) {
-        console.warn("[NETWORK] Socket token expired or invalid.");
+        console.warn("[NETWORK] Socket token expired or invalid. Forcing re-authentication.");
         handleLogout();
       }
     });
 
     setSocket(newSocket);
 
-    // FIX 1: Bulletproof Array Extraction to prevent RoomList crashes
     apiClient.get('/users/rooms')
       .then(response => {
-        const rooms = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+        const rooms = response.data || [];
         setAvailableRooms(rooms);
         rooms.forEach(room => newSocket.emit('join_room', room.name));
       })
@@ -171,10 +166,9 @@ const App = () => {
       setChatHistory([]);
       setIsTyping(false);
 
-      // FIX 2: Bulletproof Array Extraction for Chat History
       apiClient.get(`/messages/${currentRoom}`)
         .then((response) => {
-          const messagesArray = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+          const messagesArray = response.data.data || [];
           setChatHistory(messagesArray.reverse());
         })
         .catch((err) => console.error("Failed to load history", err));
@@ -183,6 +177,148 @@ const App = () => {
       socket.emit('mark_room_as_read', { roomId: currentRoom });
     }
   }, [token, currentRoom, socket]);
+
+  useEffect(() => {
+    if (!token || !socket) return;
+
+    const handleReceiveMessage = (savedMessage) => {
+      // FIX: Use the stable REFS to prevent stale data crashes
+      const activeRoom = roomsRef.current.find(r => r.name === currentRoomRef.current);
+      const isCurrentRoom = activeRoom && activeRoom.name === currentRoomRef.current;
+      const isMyMessage = savedMessage.senderId === currentUserIdRef.current;
+
+      if (savedMessage.senderId !== currentUserIdRef.current) {
+        socket.emit('message_delivered', { messageId: savedMessage._id, roomId: savedMessage.roomId });
+
+        if (isCurrentRoom) {
+          socket.emit('mark_as_read', { messageId: savedMessage._id, roomId: currentRoomRef.current });
+        }
+      }
+
+      if (!isCurrentRoom && !isMyMessage) {
+        const prefs = currentUserObj.notificationSettings || {};
+        const dnd = prefs.dnd || {};
+        let isOnDND = false;
+
+        if (dnd.isActive) {
+          if (!dnd.until || new Date(dnd.until) > new Date()) {
+            isOnDND = true;
+          }
+        }
+
+        const soundsEnabled = prefs.messageSounds !== false;
+        const isVaultMessage = savedMessage.isSecretRoom === true;
+
+        if (!isOnDND && soundsEnabled && !isVaultMessage) {
+          const audio = new Audio('/notification.mp3');
+          audio.play().catch(err => console.log('Browser blocked auto-play', err));
+        }
+      }
+
+      // If we are looking at the chat, instantly push the message into view
+      if (isCurrentRoom) {
+        setChatHistory(prevChat => [...prevChat, savedMessage]);
+      }
+
+      setAvailableRooms(prev => {
+        const roomIndex = prev.findIndex(r => r._id === savedMessage.roomId);
+        if (roomIndex > -1) {
+          const increment = (!isCurrentRoom && !isMyMessage && savedMessage.type !== 'system') ? 1 : 0;
+          const updatedRoom = {
+            ...prev[roomIndex],
+            lastMessage: savedMessage,
+            unreadCount: (prev[roomIndex].unreadCount || 0) + increment
+          };
+          const filtered = prev.filter(r => r._id !== savedMessage.roomId);
+          return [updatedRoom, ...filtered];
+        }
+        return prev;
+      });
+    };
+
+    const handleReactionUpdated = ({ messageId, emoji }) => {
+      setChatHistory((prev) => prev.map(msg =>
+        msg._id === messageId ? { ...msg, reaction: emoji } : msg
+      ));
+    };
+
+    const handleMessageStatusUpdate = ({ messageId, status }) => {
+      setChatHistory((prev) => prev.map(msg =>
+        msg._id === messageId ? { ...msg, status: status } : msg
+      ));
+      setAvailableRooms(prev => prev.map(room => {
+        if (room.lastMessage?._id === messageId) {
+          return { ...room, lastMessage: { ...room.lastMessage, status } };
+        }
+        return room;
+      }));
+    };
+
+    const handleRoomMessagesRead = ({ roomId }) => {
+      // FIX: Check against the Ref
+      if (currentRoomRef.current === roomId) {
+        setChatHistory(prev => prev.map(msg => ({ ...msg, status: 'read' })));
+      }
+      setAvailableRooms(prev => prev.map(room => {
+        if (room.name === roomId && room.lastMessage) {
+          return { ...room, lastMessage: { ...room.lastMessage, status: 'read' }, unreadCount: 0 };
+        }
+        return room;
+      }));
+    };
+
+    const handleUserTyping = ({ isTyping }) => setIsTyping(isTyping);
+
+    const handleMessageDeleted = ({ messageId }) => {
+      setChatHistory((prev) => prev.map(msg =>
+        msg._id === messageId ? { ...msg, isDeleted: true, text: null, imageUrl: null, reaction: null } : msg
+      ));
+    };
+
+    const handleMessageEdited = ({ messageId, newText }) => {
+      setChatHistory((prev) => prev.map(msg =>
+        msg._id === messageId ? { ...msg, text: newText, isEdited: true } : msg
+      ));
+    };
+
+    const handleRoomPreviewUpdate = ({ roomId, text }) => {
+      setAvailableRooms(prev => prev.map(r =>
+        r.name === roomId ? { ...r, lastMessage: { ...r.lastMessage, text: text } } : r
+      ));
+    };
+
+    const handleNewRoomAdded = (newRoom) => {
+      if (newRoom.type !== 'secret') {
+        socket.emit('join_room', newRoom.name);
+        setAvailableRooms(prev => {
+          if (prev.some(r => r._id === newRoom._id)) return prev;
+          return [newRoom, ...prev];
+        });
+      }
+    };
+
+    socket.on('receive_message', handleReceiveMessage);
+    socket.on('reaction_updated', handleReactionUpdated);
+    socket.on('message_status_update', handleMessageStatusUpdate);
+    socket.on('room_messages_read', handleRoomMessagesRead);
+    socket.on('user_typing', handleUserTyping);
+    socket.on('message_deleted', handleMessageDeleted);
+    socket.on('message_edited', handleMessageEdited);
+    socket.on('room_preview_update', handleRoomPreviewUpdate);
+    socket.on('new_room_added', handleNewRoomAdded);
+
+    return () => {
+      socket.off('receive_message', handleReceiveMessage);
+      socket.off('reaction_updated', handleReactionUpdated);
+      socket.off('message_status_update', handleMessageStatusUpdate);
+      socket.off('room_messages_read', handleRoomMessagesRead);
+      socket.off('user_typing', handleUserTyping);
+      socket.off('message_deleted', handleMessageDeleted);
+      socket.off('message_edited', handleMessageEdited);
+      socket.off('room_preview_update', handleRoomPreviewUpdate);
+      socket.off('new_room_added', handleNewRoomAdded);
+    };
+  }, [token, socket]);
 
   const sendMessage = async (payload) => {
     if (!socket || !currentRoom) return;
@@ -220,7 +356,7 @@ const App = () => {
 
       const optimisticMsg = {
         ...socketPayload,
-        _id: tempId, // Temporary ID
+        _id: tempId,
         senderId: currentUserId,
         senderName: currentUserObj.username,
         status: 'sending',
@@ -264,6 +400,7 @@ const App = () => {
 
     try {
       const finalRoomIds = [];
+
       for (const target of selectedTargets) {
         if (target.type === 'room') {
           finalRoomIds.push(target.id);
@@ -325,7 +462,9 @@ const App = () => {
       {!token ? (
         <motion.div
           key="auth-screen"
-          initial={{ opacity: 0 }} animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }} exit={{ opacity: 0, filter: 'blur(12px)', scale: 1.05 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+          exit={{ opacity: 0, filter: 'blur(12px)', scale: 1.05 }}
           transition={{ duration: 0.4, ease: "easeInOut" }}
           style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 1000 }}
         >
@@ -334,15 +473,23 @@ const App = () => {
       ) : (
         <motion.div
           key="main-app"
-          initial={{ opacity: 0, filter: 'blur(12px)', scale: 0.95 }} animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
-          transition={{ duration: 0.5, ease: "easeOut" }} className="app-container"
+          initial={{ opacity: 0, filter: 'blur(12px)', scale: 0.95 }}
+          animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="app-container"
         >
           <GlobalNav activeNav={activeNav} setActiveNav={setActiveNav} currentRoom={currentRoom} />
 
           <ChatListPane
-            activeNav={activeNav} rooms={availableRooms} currentRoom={currentRoom} setCurrentRoom={setCurrentRoom}
-            onLogout={handleLogout} openModal={openModal} searchInputRef={searchInputRef}
-            activeCallDetails={activeCallDetails} setActiveCallDetails={setActiveCallDetails}
+            activeNav={activeNav}
+            rooms={availableRooms}
+            currentRoom={currentRoom}
+            setCurrentRoom={setCurrentRoom}
+            onLogout={handleLogout}
+            openModal={openModal}
+            searchInputRef={searchInputRef}
+            activeCallDetails={activeCallDetails}
+            setActiveCallDetails={setActiveCallDetails}
             socket={socket}
             onGlobalAction={(action, data) => {
               if (action === 'OPEN_VAULT') setIsVaultModalOpen(true);
@@ -352,7 +499,9 @@ const App = () => {
               if (action === 'REDIAL_CALL') {
                 const target = { id: data.targetId, roomId: data.roomId, type: data.type };
                 let simulatedAction = data.callType === 'video' ? 'START_VIDEO_CALL' : 'START_VOICE_CALL';
-                if (data.isGroup) simulatedAction = data.callType === 'video' ? 'INITIATE_VIDEO_MEETING' : 'START_VOICE_HUDDLE';
+                if (data.isGroup) {
+                  simulatedAction = data.callType === 'video' ? 'INITIATE_VIDEO_MEETING' : 'START_VOICE_HUDDLE';
+                }
                 executeCallSelection([target], simulatedAction);
               }
             }}
@@ -362,9 +511,19 @@ const App = () => {
             <div className="active-workspace" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
               {activeNav === 'Chats' && currentRoom ? (
                 <ActiveConversationPane
-                  currentRoom={currentRoom} rooms={availableRooms} chatHistory={mergedMessages} currentUser={currentUserObj}
-                  message={message} setMessage={setMessage} sendMessage={sendMessage} onCloseMobileChat={() => setCurrentRoom(null)}
-                  socket={socket} isTyping={isTyping} rtc={rtc} deleteMessage={deleteMessage} editMessage={editMessage}
+                  currentRoom={currentRoom}
+                  rooms={availableRooms}
+                  chatHistory={chatHistory}
+                  currentUser={currentUserObj}
+                  message={message}
+                  setMessage={setMessage}
+                  sendMessage={sendMessage}
+                  onCloseMobileChat={() => setCurrentRoom(null)}
+                  socket={socket}
+                  isTyping={isTyping}
+                  rtc={rtc}
+                  deleteMessage={deleteMessage}
+                  editMessage={editMessage}
                   onGlobalAction={(action, data) => {
                     if (action === 'NEW_MESSAGE') openModal('direct');
                     if (action === 'CREATE_GROUP') openModal('group');
@@ -378,41 +537,85 @@ const App = () => {
                   }}
                 />
               ) : activeNav === 'Chats' ? (
-                <EmptyWorkspace icon={MessageSquare} title="Synced for Web" subtitle="Send and receive messages seamlessly without keeping your phone online." action={() => openModal('direct')} actionText="Start Conversation" />
+                <EmptyWorkspace
+                  icon={MessageSquare}
+                  title="Synced for Web"
+                  subtitle="Send and receive messages seamlessly without keeping your phone online."
+                  action={() => openModal('direct')}
+                  actionText="Start Conversation"
+                />
               ) : activeNav === 'Calls' && activeCallDetails ? (
-                <CallDetailsPane details={activeCallDetails} onClose={() => setActiveCallDetails(null)}
+                <CallDetailsPane
+                  details={activeCallDetails}
+                  onClose={() => setActiveCallDetails(null)}
                   onGlobalAction={(action, data) => {
                     if (action === 'REDIAL_CALL') {
                       const target = { id: data.targetId, roomId: data.roomId, type: data.type };
                       let simulatedAction = data.callType === 'video' ? 'START_VIDEO_CALL' : 'START_VOICE_CALL';
-                      if (data.isGroup) simulatedAction = data.callType === 'video' ? 'INITIATE_VIDEO_MEETING' : 'START_VOICE_HUDDLE';
+                      if (data.isGroup) {
+                        simulatedAction = data.callType === 'video' ? 'INITIATE_VIDEO_MEETING' : 'START_VOICE_HUDDLE';
+                      }
                       executeCallSelection([target], simulatedAction);
                     }
                   }}
                 />
               ) : activeNav === 'Calls' ? (
-                <EmptyWorkspace icon={Phone} title="Your Calls" subtitle="Select a contact from the list to start a high-quality voice or video call." />
+                <EmptyWorkspace
+                  icon={Phone}
+                  title="Your Calls"
+                  subtitle="Select a contact from the list to start a high-quality voice or video call."
+                />
               ) : activeNav === 'Status' ? (
-                <EmptyWorkspace icon={Radio} title="Status Updates" subtitle="Stay updated with your friends. Click on a status to view it." />
+                <EmptyWorkspace
+                  icon={Radio}
+                  title="Status Updates"
+                  subtitle="Stay updated with your friends. Click on a status to view it."
+                />
               ) : (
-                <EmptyWorkspace icon={Hash} title="Channels" subtitle="Discover and join channels to stay updated on what matters to you." />
+                <EmptyWorkspace
+                  icon={Hash}
+                  title="Channels"
+                  subtitle="Discover and join channels to stay updated on what matters to you."
+                />
               )}
             </div>
           )}
 
-          {/* GLOBAL MODALS RESTORED */}
           <ActiveCallModal rtc={rtc} availableRooms={availableRooms} currentUser={currentUserObj} />
-          
-          <NewChatModal isOpen={isCreationModalOpen} initialMode={creationMode} onClose={() => setIsCreationModalOpen(false)} onRoomCreated={handleRoomCreated} />
-          
-          <VaultModal isOpen={isVaultModalOpen} onClose={() => setIsVaultModalOpen(false)} onRoomUnlocked={(roomData) => {
-            if (roomData.type !== 'secret') setAvailableRooms(prev => [roomData, ...prev.filter(r => r._id !== roomData._id)]);
-            setCurrentRoom(roomData.name);
-          }} />
 
-          <CallSelectionModal isOpen={!!callModalAction} action={callModalAction} onClose={() => setCallModalAction(null)} availableRooms={availableRooms} onExecuteCall={executeCallSelection} />
-          
-          <ForwardModal isOpen={!!forwardingMessage} onClose={() => setForwardingMessage(null)} messageToForward={forwardingMessage} availableRooms={availableRooms} onForward={executeForward} />
+          <NewChatModal
+            isOpen={isCreationModalOpen}
+            initialMode={creationMode}
+            onClose={() => setIsCreationModalOpen(false)}
+            onRoomCreated={handleRoomCreated}
+          />
+
+          <VaultModal
+            isOpen={isVaultModalOpen}
+            onClose={() => setIsVaultModalOpen(false)}
+            onRoomUnlocked={(roomData) => {
+              if (roomData.type !== 'secret') {
+                setAvailableRooms(prev => [roomData, ...prev.filter(r => r._id !== roomData._id)]);
+              }
+              setCurrentRoom(roomData.name);
+            }}
+          />
+
+          <CallSelectionModal
+            isOpen={!!callModalAction}
+            action={callModalAction}
+            onClose={() => setCallModalAction(null)}
+            availableRooms={availableRooms}
+            onExecuteCall={executeCallSelection}
+          />
+
+          <ForwardModal
+            isOpen={!!forwardingMessage}
+            onClose={() => setForwardingMessage(null)}
+            messageToForward={forwardingMessage}
+            availableRooms={availableRooms}
+            onForward={executeForward}
+          />
 
           <AnimatePresence>
             {toastMessage && (
