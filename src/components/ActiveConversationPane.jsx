@@ -9,6 +9,7 @@ import AssetDrawer from './assets/AssetDrawer';
 import ContactProfilePanel from './ContactProfilePanel';
 import SearchChatOverlay from './message/SearchChatOverlay';
 import { triggerHaptic } from '../utils/haptics';
+import { apiClient } from '../utils/api';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
 const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentUser, message, setMessage, sendMessage, onCloseMobileChat, onGlobalAction, socket, isTyping, rtc, editMessage, deleteMessage }) => {
@@ -24,6 +25,7 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
     const isMobile = useIsMobile();
 
     const handleOpenContext = (x, y, msg) => setContextState({ isOpen: true, x, y, msg });
+
     const handleContextAction = (action, msg) => {
         triggerHaptic('light');
         if (action === 'DELETE') deleteMessage(msg._id, currentRoom);
@@ -62,34 +64,41 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
         }
 
         const lowerQuery = query.toLowerCase();
-        // Filtering the locally loaded chat history. 
-        // Note: For full history search, this is where you'd trigger an axios.get(`/api/messages/${currentRoom}/search?q=${query}`)
         const matches = chatHistory.filter(msg =>
             msg.text && msg.text.toLowerCase().includes(lowerQuery)
         );
         setSearchResults(matches);
     };
 
-    // Scroll to the specific message and briefly highlight it
     const handleJumpToMessage = (messageId) => {
         const element = document.getElementById(`msg-${messageId}`);
         if (element) {
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-            // Apply a temporary highlight effect to draw the user's eye
             element.style.transition = 'background-color 0.3s ease';
-            element.style.backgroundColor = 'rgba(252, 203, 6, 0.15)'; // Your accent color washed out
+            element.style.backgroundColor = 'rgba(252, 203, 6, 0.15)';
 
             setTimeout(() => {
                 element.style.backgroundColor = 'transparent';
             }, 2000);
-
-            // Close the overlay after jumping
             setIsSearchOpen(false);
         } else {
-            // If the message is older and not currently in the DOM (due to pagination),
-            // this is where you would trigger a backend fetch for that specific page offset.
             alert("This message is deeper in your history. Scroll up to load older messages first.");
+        }
+    };
+
+    // INTERCEPT GLOBAL ACTIONS TO HANDLE BACKEND API CALLS DIRECTLY
+    const handleInterceptedGlobalAction = (action, data) => {
+        if (action === 'CLEAR_HISTORY') {
+            const activeRoomObj = rooms.find(r => r.name === currentRoom);
+            if (activeRoomObj) {
+                apiClient.put(`/rooms/${activeRoomObj._id}/clearHistory`)
+                    .then(() => {
+                        if (onGlobalAction) onGlobalAction('CLEAR_HISTORY');
+                    })
+                    .catch(e => alert("Failed to clear history on the server."));
+            }
+        } else if (onGlobalAction) {
+            onGlobalAction(action, data);
         }
     };
 
@@ -109,11 +118,9 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                 overflow: 'hidden'
             }}
         >
-            {/* The Main Chat Area */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
                 {!currentRoom ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', flex: 1, padding: '24px' }}>
-
                         <motion.div
                             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
                             style={{ textAlign: 'center', marginBottom: '40px' }}
@@ -122,12 +129,14 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                                 <img src="/synced-logo.png" alt="Workspace" style={{ width: '48px', filter: 'grayscale(100%)', opacity: 0.3 }} />
                             </div>
                             <h2 style={{ fontSize: '2rem', color: 'var(--text-primary)', margin: '0 0 8px 0' }}>
+                                {/* First JSX block: The Greeting */}
                                 {(() => {
                                     const hour = new Date().getHours();
                                     if (hour < 12) return 'Good morning';
                                     if (hour < 18) return 'Good afternoon';
                                     return 'Good evening';
-                                })()}, {currentUserObj.username || 'User'}
+                                })()},
+                                {currentUserObj?.username || 'User'}
                             </h2>
                             <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>What would you like to do today?</p>
                         </motion.div>
@@ -203,14 +212,10 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                             flexDirection: 'column',
                             height: '100%',
                             position: 'relative',
-
-                            // --- THE FIX: Inject Wallpaper Variables ---
                             backgroundImage: 'var(--chat-bg-image)',
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                             backgroundAttachment: 'fixed',
-
-                            // --- The FIX: Inject Dimming Layer (Uses box-shadow hack for inset overlay) ---
                             boxShadow: 'inset 0 0 0 2000px var(--chat-bg-dim)'
                         }}
                     >
@@ -219,17 +224,13 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                             roomObj={rooms.find(r => r.name === currentRoom)}
                             onCloseMobileChat={onCloseMobileChat}
                             onOpenProfile={() => setIsProfileOpen(true)}
-                            onGlobalAction={onGlobalAction}
+                            onGlobalAction={handleInterceptedGlobalAction}
                             isTyping={isTyping}
                             rtc={rtc}
                             onOpenSearch={() => setIsSearchOpen(true)}
                         />
 
-                        <div className="message-list">
-                            {chatHistory.map(msg => (
-                                <MessageBubble key={msg._id || msg.tempId} msg={msg} />
-                            ))}
-                        </div>
+                        {/* FIX: Removed the rogue duplicate message list div that was here */}
 
                         <div style={{ flexGrow: 1, padding: '24px 24px 8px 24px', backgroundColor: 'transparent', overflowY: 'auto', display: 'flex', flexDirection: 'column-reverse', gap: '0px' }}>
 
@@ -271,7 +272,6 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                                 })
                             )}
 
-                            {/* FIX: Moved infinite-scroll-trigger below the messages so it sits at the visual TOP of the chat history, removing the gap at the bottom */}
                             <div id="infinite-scroll-trigger" style={{ height: '20px', width: '100%', flexShrink: 0 }} />
                         </div>
 
@@ -291,14 +291,12 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                         <AnimatePresence>
                             {isAssetDrawerOpen && (
                                 <div style={{ position: 'absolute', inset: 0, zIndex: 105, pointerEvents: 'none' }}>
-                                    {/* The Dark Overlay */}
                                     <motion.div
                                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                                         onClick={() => setIsAssetDrawerOpen(false)}
                                         style={{ position: 'absolute', inset: 0, backgroundColor: isMobile ? 'rgba(0,0,0,0.5)' : 'transparent', pointerEvents: 'auto' }}
                                     />
 
-                                    {/* The Actual Drawer */}
                                     <div style={{ position: 'absolute', bottom: isMobile ? '0' : '80px', left: isMobile ? '0' : '24px', pointerEvents: 'auto' }}>
                                         <AssetDrawer onSelect={handleAssetSelect} onClose={() => setIsAssetDrawerOpen(false)} />
                                     </div>
@@ -330,7 +328,6 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
 
             <AnimatePresence>
                 {isProfileOpen && currentRoom && (() => {
-                    // Extract the room and target user dynamically
                     const activeRoomObj = rooms.find(r => r.name === currentRoom);
                     const targetUserRecord = activeRoomObj?.participants?.find(p => (p.userId?._id || p.userId) !== (currentUserObj.id || currentUserObj._id));
                     const targetUserObj = targetUserRecord?.userId || { username: currentRoom };
@@ -343,13 +340,11 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                             isMobile={isMobile}
                             onClose={() => setIsProfileOpen(false)}
                             onCall={(type) => {
-                                setIsProfileOpen(false); // Close profile panel
+                                setIsProfileOpen(false);
 
                                 const targetId = targetUserObj._id || targetUserObj;
 
                                 if (rtc && rtc.initiateCall) {
-                                    // FIX: We must pass the MongoDB _id (activeRoomObj._id) 
-                                    // instead of the string name (currentRoom)
                                     rtc.initiateCall(activeRoomObj._id, targetId, type, false);
                                 } else if (onGlobalAction) {
                                     onGlobalAction('INITIATE_CALL', { targetUser: targetUserObj, type });

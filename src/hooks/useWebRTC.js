@@ -17,20 +17,20 @@ export const useWebRTC = (socket, currentUserId) => {
     const [callMetadata, setCallMetadata] = useState(null);
     const [localStream, setLocalStream] = useState(null);
     const [remoteStream, setRemoteStream] = useState(null);
-    
-    // NEW: Expose call duration to the UI
     const [callDuration, setCallDuration] = useState(0);
 
     const peerConnection = useRef(null);
     const timerRef = useRef(null); 
-    // NEW: Keep a mutable ref of the duration so the unmount/hangup closure can read the final value
     const durationTrackerRef = useRef(0);
+    
+    // Use a ref to access the latest metadata inside socket listeners without destroying the listener
+    const metadataRef = useRef(null);
+    useEffect(() => { metadataRef.current = callMetadata; }, [callMetadata]);
 
     useEffect(() => {
         if (!socket) return;
 
         socket.on('incoming_call', (payload) => {
-            if (callState !== 'idle') return;
             setCallMetadata(payload);
             setCallState('receiving');
         });
@@ -42,17 +42,20 @@ export const useWebRTC = (socket, currentUserId) => {
             startCallTimer();
             const offer = await peerConnection.current.createOffer();
             await peerConnection.current.setLocalDescription(offer);
-            socket.emit('webrtc_signal', { targetUserId: responderId, signal: offer, callId: callMetadata.callId });
+            
+            const m = metadataRef.current;
+            socket.emit('webrtc_signal', { targetUserId: responderId, signal: offer, callId: m?.callId });
         });
 
         socket.on('webrtc_signal', async ({ senderId, signal }) => {
             if (!peerConnection.current) return;
+            const m = metadataRef.current;
             
             if (signal.type === 'offer') {
                 await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
                 const answer = await peerConnection.current.createAnswer();
                 await peerConnection.current.setLocalDescription(answer);
-                socket.emit('webrtc_signal', { targetUserId: senderId, signal: answer, callId: callMetadata.callId });
+                socket.emit('webrtc_signal', { targetUserId: senderId, signal: answer, callId: m?.callId });
                 startCallTimer();
             } else if (signal.type === 'answer') {
                 await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
@@ -75,7 +78,7 @@ export const useWebRTC = (socket, currentUserId) => {
             socket.off('call_cancelled');
             socket.off('call_ended');
         };
-    }, [socket, callState, callMetadata]);
+    }, [socket]); // FIX: Removed callState and callMetadata from deps to prevent listener destruction
 
     const setupMediaAndPeer = async (type) => {
         try {
@@ -93,9 +96,10 @@ export const useWebRTC = (socket, currentUserId) => {
             };
 
             peerConnection.current.onicecandidate = (event) => {
-                if (event.candidate && callMetadata) {
-                    const targetId = callMetadata.callerId === currentUserId ? callMetadata.responderId : callMetadata.callerId;
-                    socket.emit('webrtc_signal', { targetUserId: targetId, signal: event.candidate, callId: callMetadata.callId });
+                if (event.candidate && metadataRef.current) {
+                    const m = metadataRef.current;
+                    const targetId = m.callerId === currentUserId ? m.responderId : m.callerId;
+                    socket.emit('webrtc_signal', { targetUserId: targetId, signal: event.candidate, callId: m.callId });
                 }
             };
         } catch (error) {
@@ -109,10 +113,14 @@ export const useWebRTC = (socket, currentUserId) => {
         if (callState !== 'idle') await endCall();
 
         await setupMediaAndPeer(type);
-        setCallState('ringing');
+        
+        // FIX: Optimistically set metadata so the ActiveCallModal renders INSTANTLY
+        setCallMetadata({ callId: 'initiating...', callerId: currentUserId, roomId, type, responderId: targetUserId });
+        setCallState('calling');
         
         socket.emit('start_call', { roomId, targetUserId, type, isGroup }, (response) => {
             if (response.success) {
+                // Update with the real server-generated Call ID
                 setCallMetadata({ callId: response.callId, callerId: currentUserId, roomId, type, responderId: targetUserId });
             } else {
                 alert(response.error || "Call failed");
@@ -135,8 +143,6 @@ export const useWebRTC = (socket, currentUserId) => {
     const endCall = () => {
         if (!callMetadata) return;
         const targetId = callMetadata.callerId === currentUserId ? callMetadata.responderId : callMetadata.callerId;
-        
-        // FIX: Extract the exact tracked duration from the ref
         const finalDuration = durationTrackerRef.current;
         
         socket.emit('end_call', { callId: callMetadata.callId, targetUserId: targetId, durationInSeconds: finalDuration });
@@ -165,7 +171,6 @@ export const useWebRTC = (socket, currentUserId) => {
         }
     };
 
-    // FIX: Properly implement the interval timer
     const startCallTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         durationTrackerRef.current = 0;
@@ -186,7 +191,6 @@ export const useWebRTC = (socket, currentUserId) => {
         setCallState('idle');
         setCallMetadata(null);
         
-        // Clear timers and reset telemetry
         if (timerRef.current) clearInterval(timerRef.current);
         durationTrackerRef.current = 0;
         setCallDuration(0);

@@ -20,16 +20,18 @@ const ActiveRecordingUI = ({ isMobile, isLocked, recordingTime, abortRecording, 
             requestRef.current = requestAnimationFrame(draw);
             analyser.getByteFrequencyData(dataArray);
 
-            // Handle retina/HDPI displays
             const dpr = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
+            
+            // Prevent drawing if canvas isn't fully laid out yet
+            if (rect.width === 0) return;
+
             canvas.width = rect.width * dpr;
             canvas.height = rect.height * dpr;
             ctx.scale(dpr, dpr);
-
             ctx.clearRect(0, 0, rect.width, rect.height);
 
-            const barCount = 28; // Number of visual bars
+            const barCount = 28; 
             const gap = 3;
             const barWidth = (rect.width - (gap * (barCount - 1))) / barCount;
             const centerY = rect.height / 2;
@@ -37,18 +39,17 @@ const ActiveRecordingUI = ({ isMobile, isLocked, recordingTime, abortRecording, 
             let x = 0;
 
             for (let i = 0; i < barCount; i++) {
-                // Map frequency bins; skip the ultra-highs which are mostly silent
                 const dataIndex = Math.floor(i * (analyser.frequencyBinCount / (barCount * 1.5)));
                 const value = dataArray[dataIndex];
                 const percent = value / 255;
-                const height = Math.max(4, percent * rect.height * 0.85); // Min 4px height
+                const height = Math.max(4, percent * rect.height * 0.85); 
 
                 ctx.beginPath();
                 ctx.lineCap = 'round';
-                ctx.lineWidth = barWidth;
+                ctx.lineWidth = Math.max(2, barWidth); // Ensure lines don't get too thick
                 
-                // Draw in Synced Accent Color
-                ctx.strokeStyle = 'var(--accent-primary)'; 
+                // FIX: Hardcoded pure hex color to prevent CSS variable black-out bug
+                ctx.strokeStyle = '#FCCB06'; 
                 
                 ctx.moveTo(x + barWidth / 2, centerY - height / 2);
                 ctx.lineTo(x + barWidth / 2, centerY + height / 2);
@@ -71,15 +72,13 @@ const ActiveRecordingUI = ({ isMobile, isLocked, recordingTime, abortRecording, 
                         <Trash2 size={20} color="#ef4444" cursor="pointer" onClick={abortRecording} />
                     </div>
                     
-                    {/* PREMIUM TIMER (Pulsing Red Dot + White Text) */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                         <motion.div animate={{ opacity: [1, 0.2, 1] }} transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }} style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ef4444' }} />
                         <span style={{ color: '#fff', fontWeight: 'bold', fontVariantNumeric: 'tabular-nums', fontSize: '0.95rem' }}>{formatTime(recordingTime)}</span>
                     </div>
 
-                    {/* LIVE WEB-AUDIO CANVAS */}
                     <div style={{ flex: 1, height: '24px', display: 'flex', alignItems: 'center', marginLeft: '6px' }}>
-                        <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+                        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
                     </div>
                 </div>
             ) : (
