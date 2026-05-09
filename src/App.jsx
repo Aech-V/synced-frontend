@@ -1,37 +1,61 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import io from "socket.io-client";
-import Auth from "./Auth";
 import { AnimatePresence, motion } from "framer-motion";
+import Auth from "./Auth";
 import ChatListPane from "./components/chat-list/ChatListPane";
 import ActiveConversationPane from "./components/ActiveConversationPane";
 import GlobalNav from "./components/GlobalNav";
 import NewChatModal from "./components/NewChatModal";
 import ActiveCallModal from './components/ActiveCallModal';
 import CallDetailsPane from "./components/CallDetailsPane";
-import { uploadMediaFile, resolveDirectMessage, apiClient } from './utils/api';
-import { useWebRTC } from './hooks/useWebRTC';
 import VaultModal from "./components/VaultModal";
 import ForwardModal from "./components/ForwardModal";
 import CallSelectionModal from "./components/CallSelectionModal";
 import { CheckCircle2, MessageSquare, Phone, Radio, Hash } from 'lucide-react';
+import { uploadMediaFile, resolveDirectMessage, apiClient } from './utils/api';
+import { useWebRTC } from './hooks/useWebRTC';
 import { useIsMobile } from './hooks/useMediaQuery';
 import { useChatStore } from '../store/useChatStore';
 import { useSocketEvents } from './hooks/useSocketEvents';
 
+// --- PREMIUM NATIVE EMPTY STATE ENGINE ---
 const EmptyWorkspace = ({ icon: Icon, title, subtitle, action, actionText }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', position: 'relative' }}>
-    <div style={{ margin: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ width: '110px', height: '110px', borderRadius: '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '28px', boxShadow: '0 20px 40px rgba(0,0,0,0.1), inset 0 2px 4px rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }}>
-        <Icon size={52} color="var(--accent-primary)" strokeWidth={1.5} />
-      </div>
-      <h2 style={{ fontSize: '2rem', color: 'var(--text-primary)', margin: '0 0 12px 0', fontWeight: '800', letterSpacing: '-0.5px' }}>{title}</h2>
-      <p style={{ fontSize: '1.05rem', maxWidth: '340px', textAlign: 'center', margin: '0 0 32px 0', lineHeight: '1.6', opacity: 0.8 }}>{subtitle}</p>
-      {action && (
-        <button onClick={action} style={{ padding: '14px 28px', backgroundColor: 'var(--accent-primary)', color: '#2A2511', border: 'none', borderRadius: '100px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem', boxShadow: '0 4px 14px rgba(252, 203, 6, 0.25)', transition: 'all 0.2s ease' }}>
-          {actionText}
-        </button>
-      )}
+  <div style={{
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    height: '100%', width: '100%', backgroundColor: 'var(--bg-primary)',
+    color: 'var(--text-secondary)'
+  }}>
+    <div style={{
+      width: '96px', height: '96px', borderRadius: '50%',
+      backgroundColor: 'var(--bg-surface-hover)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      marginBottom: '24px', boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
+      border: '1px solid var(--border-subtle)'
+    }}>
+      <Icon size={44} color="var(--accent-primary)" strokeWidth={1.5} />
     </div>
+
+    <h2 style={{ fontSize: '1.75rem', color: 'var(--text-primary)', margin: '0 0 12px 0', fontWeight: '800', letterSpacing: '-0.5px' }}>
+      {title}
+    </h2>
+    <p style={{ fontSize: '1rem', maxWidth: '340px', textAlign: 'center', margin: '0 0 32px 0', lineHeight: '1.6', opacity: 0.8 }}>
+      {subtitle}
+    </p>
+
+    {action && (
+      <button onClick={action} style={{
+        padding: '14px 28px', backgroundColor: 'var(--accent-primary)',
+        color: '#2A2511', border: 'none', borderRadius: '100px',
+        fontWeight: 'bold', cursor: 'pointer', fontSize: '0.95rem',
+        boxShadow: '0 4px 14px rgba(252, 203, 6, 0.25)',
+        transition: 'all 0.2s ease'
+      }}
+        onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+        onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+      >
+        {actionText}
+      </button>
+    )}
   </div>
 );
 
@@ -65,40 +89,96 @@ const App = () => {
 
   const searchInputRef = useRef(null);
 
+  // --- ZUSTAND OPTIMISTIC UI MERGE ---
   const mergedMessages = useMemo(() => {
     const pending = optimisticMessages[currentRoom] || [];
     return [...chatHistory, ...pending];
   }, [chatHistory, optimisticMessages, currentRoom]);
 
+  // --- SOCKET EVENT DELEGATION ---
   useSocketEvents(socket, currentRoom, currentUserId, currentUserObj, setChatHistory, setAvailableRooms, setIsTyping);
 
   useEffect(() => {
-    if (!token) return;
+    if (activeNav !== 'Calls') setActiveCallDetails(null);
+  }, [activeNav]);
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (window.innerWidth <= 768) setCurrentRoom(null);
+        setTimeout(() => searchInputRef.current?.focus(), 50);
+      }
+      if (e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        openModal('direct');
+      }
+      if (e.altKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        openModal('group');
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  const openModal = (mode = 'menu') => {
+    setCreationMode(mode);
+    setIsCreationModalOpen(true);
+  };
+
+  const handleRoomCreated = (roomData) => {
+    if (roomData.type !== 'secret') {
+      setAvailableRooms(prev => [roomData, ...prev.filter(r => r._id !== roomData._id)]);
+    }
+    setCurrentRoom(roomData.name);
+    if (socket) {
+      socket.emit('room_created', roomData);
+      socket.emit('join_room', roomData.name);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    
     const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
     const socketUrl = rawApiUrl.replace('/api', '');
-
-    const newSocket = io(socketUrl, { 
-        auth: { token },
-        transports: ['polling', 'websocket'] 
-    });
+    const newSocket = io(socketUrl, { auth: { token: token }, transports: ['polling', 'websocket'] });
 
     newSocket.on("connect_error", (err) => {
-      if (err.message.includes("Authentication") || err.message.includes("token")) handleLogout();
+      if (err.message.includes("Authentication") || err.message.includes("token")) {
+        console.warn("[NETWORK] Socket token expired or invalid.");
+        handleLogout();
+      }
     });
+
     setSocket(newSocket);
 
-    apiClient.get('/users/rooms').then(res => {
-      setAvailableRooms(res.data || []);
-      res.data?.forEach(room => newSocket.emit('join_room', room.name));
-    });
+    // FIX 1: Bulletproof Array Extraction to prevent RoomList crashes
+    apiClient.get('/users/rooms')
+      .then(response => {
+        const rooms = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+        setAvailableRooms(rooms);
+        rooms.forEach(room => newSocket.emit('join_room', room.name));
+      })
+      .catch(err => console.error("Failed to load sidebar rooms", err));
+
     return () => newSocket.disconnect();
   }, [token]);
 
   useEffect(() => {
     if (token && currentRoom && socket) {
       setChatHistory([]);
-      apiClient.get(`/messages/${currentRoom}`).then(res => setChatHistory((res.data.data || []).reverse()));
+      setIsTyping(false);
+
+      // FIX 2: Bulletproof Array Extraction for Chat History
+      apiClient.get(`/messages/${currentRoom}`)
+        .then((response) => {
+          const messagesArray = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+          setChatHistory(messagesArray.reverse());
+        })
+        .catch((err) => console.error("Failed to load history", err));
+
       socket.emit('join_room', currentRoom);
       socket.emit('mark_room_as_read', { roomId: currentRoom });
     }
@@ -109,36 +189,60 @@ const App = () => {
     try {
       let finalImageUrl = payload.imageUrl || null;
       let finalAudioUrl = payload.audioUrl || null;
+      let finalFileSize = 0;
+      let finalFileFormat = 'text';
 
       if (payload.file) {
         const uploadResult = await uploadMediaFile(payload.file);
         if (payload.type === 'audio') finalAudioUrl = uploadResult.mediaUrl;
         else finalImageUrl = uploadResult.mediaUrl;
+
+        finalFileSize = uploadResult.fileSize || 0;
+        finalFileFormat = uploadResult.fileFormat || 'unknown';
       }
 
       const tempId = Date.now().toString();
+
       const socketPayload = {
-        room: currentRoom, type: payload.type || 'text', text: payload.text || '',
-        imageUrl: finalImageUrl, audioUrl: finalAudioUrl, tempId
+        room: currentRoom,
+        type: payload.type || 'text',
+        text: payload.text || '',
+        imageUrl: finalImageUrl,
+        audioUrl: finalAudioUrl,
+        stickerData: payload.stickerData || null,
+        gifUrl: payload.gifUrl || null,
+        isEphemeral: payload.isEphemeral || false,
+        replyTo: payload.replyTo || null,
+        tempId: tempId,
+        fileSize: finalFileSize,
+        fileFormat: finalFileFormat
       };
 
       const optimisticMsg = {
-        ...socketPayload, _id: tempId, senderId: currentUserId,
-        senderName: currentUserObj.username, status: 'sending', createdAt: new Date().toISOString()
+        ...socketPayload,
+        _id: tempId,
+        senderId: currentUserId,
+        senderName: currentUserObj.username,
+        status: 'sending',
+        replyTo: payload.replyToObj || null,
+        createdAt: new Date().toISOString()
       };
 
       addOptimistic(currentRoom, optimisticMsg);
 
       socket.emit('send_message', socketPayload, (ack) => {
-        if (!ack || !ack.success) {
+        if (ack && ack.success) {
+          const confirmedMsg = { ...optimisticMsg, _id: ack.messageId, status: 'sent' };
+          setChatHistory(prev => [...prev, confirmedMsg]);
           removeOptimistic(currentRoom, tempId);
-          alert("Failed to send message.");
         } else {
           removeOptimistic(currentRoom, tempId);
+          alert("Failed to send message. Please check your network.");
         }
       });
     } catch (error) {
-      alert("Failed to process message.");
+      console.error("Failed to process message:", error);
+      alert("Failed to send message. Please check your network.");
     }
   };
 
@@ -146,60 +250,179 @@ const App = () => {
     localStorage.removeItem('synced_token');
     localStorage.removeItem('synced_user');
     setToken(null);
+    setCurrentRoom(null);
     if (socket) socket.disconnect();
+  };
+
+  const deleteMessage = (messageId, roomId) => socket.emit('delete_message', { messageId, roomId });
+  const editMessage = (messageId, roomId, newText) => socket.emit('edit_message', { messageId, roomId, newText });
+
+  const executeForward = async (selectedTargets) => {
+    if (!socket || !forwardingMessage) return;
+
+    try {
+      const finalRoomIds = [];
+      for (const target of selectedTargets) {
+        if (target.type === 'room') {
+          finalRoomIds.push(target.id);
+        } else if (target.type === 'user') {
+          const res = await resolveDirectMessage(target.id);
+          finalRoomIds.push(res.room._id);
+        }
+      }
+
+      socket.emit('forward_message', {
+        messageId: forwardingMessage._id,
+        targetRoomIds: finalRoomIds
+      }, (ack) => {
+        if (ack && ack.success) {
+          setToastMessage(`Message forwarded to ${ack.successCount} chat(s)`);
+          setTimeout(() => setToastMessage(''), 3000);
+          setForwardingMessage(null);
+        } else {
+          alert(ack?.error || "Forwarding failed.");
+        }
+      });
+    } catch (error) {
+      console.error("Forwarding preparation failed:", error);
+      alert("Failed to prepare forwarding payload.");
+    }
+  };
+
+  const executeCallSelection = async (selectedTargets, action) => {
+    setCallModalAction(null); 
+    const isVideo = action === 'START_VIDEO_CALL' || action === 'INITIATE_VIDEO_MEETING';
+    const callType = isVideo ? 'video' : 'voice';
+    const isGroup = action === 'START_VOICE_HUDDLE' || action === 'INITIATE_VIDEO_MEETING';
+
+    try {
+      if (!isGroup) {
+        const target = selectedTargets[0];
+        let roomId = target.roomId;
+
+        if (!roomId && target.type === 'user') {
+          const res = await resolveDirectMessage(target.id);
+          roomId = res.room._id;
+          setAvailableRooms(prev => prev.some(r => r._id === res.room._id) ? prev : [res.room, ...prev]);
+          setCurrentRoom(res.room.name);
+        }
+        rtc.initiateCall(roomId, target.id, callType, false);
+      } else {
+        const targetIds = selectedTargets.map(t => t.id);
+        const tempRoomId = selectedTargets[0]?.roomId || `temp_huddle_${Date.now()}`;
+        rtc.initiateCall(tempRoomId, targetIds, callType, true);
+      }
+    } catch (error) {
+      console.error("Failed to initiate call from modal:", error);
+      alert("Could not start the call.");
+    }
   };
 
   return (
     <AnimatePresence mode="wait">
       {!token ? (
-        <motion.div key="auth-screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, filter: 'blur(12px)' }} style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 1000 }}>
-          <Auth onLoginSuccess={setToken} />
+        <motion.div
+          key="auth-screen"
+          initial={{ opacity: 0 }} animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }} exit={{ opacity: 0, filter: 'blur(12px)', scale: 1.05 }}
+          transition={{ duration: 0.4, ease: "easeInOut" }}
+          style={{ width: '100%', height: '100%', position: 'absolute', zIndex: 1000 }}
+        >
+          <Auth onLoginSuccess={(newToken) => setToken(newToken)} />
         </motion.div>
       ) : (
-        <motion.div key="main-app" initial={{ opacity: 0, filter: 'blur(12px)' }} animate={{ opacity: 1, filter: 'blur(0px)' }} className="app-container">
+        <motion.div
+          key="main-app"
+          initial={{ opacity: 0, filter: 'blur(12px)', scale: 0.95 }} animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+          transition={{ duration: 0.5, ease: "easeOut" }} className="app-container"
+        >
           <GlobalNav activeNav={activeNav} setActiveNav={setActiveNav} currentRoom={currentRoom} />
-          
+
           <ChatListPane
-            activeNav={activeNav} 
-            rooms={availableRooms} 
-            currentRoom={currentRoom}
-            setCurrentRoom={setCurrentRoom} 
-            onLogout={handleLogout} 
-            searchInputRef={searchInputRef}
-            onGlobalAction={(action) => action === 'OPEN_VAULT' && setIsVaultModalOpen(true)}
+            activeNav={activeNav} rooms={availableRooms} currentRoom={currentRoom} setCurrentRoom={setCurrentRoom}
+            onLogout={handleLogout} openModal={openModal} searchInputRef={searchInputRef}
+            activeCallDetails={activeCallDetails} setActiveCallDetails={setActiveCallDetails}
             socket={socket}
-            activeCallDetails={activeCallDetails}
-            setActiveCallDetails={setActiveCallDetails}
-            openModal={(mode) => {
-                setCreationMode(mode);
-                setIsCreationModalOpen(true);
+            onGlobalAction={(action, data) => {
+              if (action === 'OPEN_VAULT') setIsVaultModalOpen(true);
+              if (['START_VOICE_CALL', 'START_VIDEO_CALL', 'START_VOICE_HUDDLE', 'INITIATE_VIDEO_MEETING'].includes(action)) {
+                setCallModalAction(action);
+              }
+              if (action === 'REDIAL_CALL') {
+                const target = { id: data.targetId, roomId: data.roomId, type: data.type };
+                let simulatedAction = data.callType === 'video' ? 'START_VIDEO_CALL' : 'START_VOICE_CALL';
+                if (data.isGroup) simulatedAction = data.callType === 'video' ? 'INITIATE_VIDEO_MEETING' : 'START_VOICE_HUDDLE';
+                executeCallSelection([target], simulatedAction);
+              }
             }}
           />
 
           {(!isMobile || currentRoom || activeCallDetails) && (
-            <div className="active-workspace" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <div className="active-workspace" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
               {activeNav === 'Chats' && currentRoom ? (
                 <ActiveConversationPane
-                  currentRoom={currentRoom} rooms={availableRooms} chatHistory={mergedMessages}
-                  currentUser={currentUserObj} message={message} setMessage={setMessage}
-                  sendMessage={sendMessage} socket={socket} isTyping={isTyping} rtc={rtc}
+                  currentRoom={currentRoom} rooms={availableRooms} chatHistory={mergedMessages} currentUser={currentUserObj}
+                  message={message} setMessage={setMessage} sendMessage={sendMessage} onCloseMobileChat={() => setCurrentRoom(null)}
+                  socket={socket} isTyping={isTyping} rtc={rtc} deleteMessage={deleteMessage} editMessage={editMessage}
+                  onGlobalAction={(action, data) => {
+                    if (action === 'NEW_MESSAGE') openModal('direct');
+                    if (action === 'CREATE_GROUP') openModal('group');
+                    if (action === 'GLOBAL_SEARCH') {
+                      if (window.innerWidth <= 768) setCurrentRoom(null);
+                      setTimeout(() => searchInputRef.current?.focus(), 50);
+                    }
+                    if (action === 'OPEN_VAULT') setIsVaultModalOpen(true);
+                    if (action === 'OPEN_FORWARD_MODAL') setForwardingMessage(data);
+                    if (action === 'CLEAR_HISTORY') setChatHistory([]);
+                  }}
                 />
+              ) : activeNav === 'Chats' ? (
+                <EmptyWorkspace icon={MessageSquare} title="Synced for Web" subtitle="Send and receive messages seamlessly without keeping your phone online." action={() => openModal('direct')} actionText="Start Conversation" />
+              ) : activeNav === 'Calls' && activeCallDetails ? (
+                <CallDetailsPane details={activeCallDetails} onClose={() => setActiveCallDetails(null)}
+                  onGlobalAction={(action, data) => {
+                    if (action === 'REDIAL_CALL') {
+                      const target = { id: data.targetId, roomId: data.roomId, type: data.type };
+                      let simulatedAction = data.callType === 'video' ? 'START_VIDEO_CALL' : 'START_VOICE_CALL';
+                      if (data.isGroup) simulatedAction = data.callType === 'video' ? 'INITIATE_VIDEO_MEETING' : 'START_VOICE_HUDDLE';
+                      executeCallSelection([target], simulatedAction);
+                    }
+                  }}
+                />
+              ) : activeNav === 'Calls' ? (
+                <EmptyWorkspace icon={Phone} title="Your Calls" subtitle="Select a contact from the list to start a high-quality voice or video call." />
+              ) : activeNav === 'Status' ? (
+                <EmptyWorkspace icon={Radio} title="Status Updates" subtitle="Stay updated with your friends. Click on a status to view it." />
               ) : (
-                <EmptyWorkspace icon={MessageSquare} title="Synced" subtitle="Select a chat to start messaging." />
+                <EmptyWorkspace icon={Hash} title="Channels" subtitle="Discover and join channels to stay updated on what matters to you." />
               )}
             </div>
           )}
 
-          {/* --- MODALS --- */}
-          <NewChatModal
-            isOpen={isCreationModalOpen}
-            onClose={() => setIsCreationModalOpen(false)}
-            initialMode={creationMode}
-            onRoomCreated={(room) => {
-                setAvailableRooms(prev => [...prev, room]);
-                setCurrentRoom(room.name);
-            }}
-          />
+          {/* GLOBAL MODALS RESTORED */}
+          <ActiveCallModal rtc={rtc} availableRooms={availableRooms} currentUser={currentUserObj} />
+          
+          <NewChatModal isOpen={isCreationModalOpen} initialMode={creationMode} onClose={() => setIsCreationModalOpen(false)} onRoomCreated={handleRoomCreated} />
+          
+          <VaultModal isOpen={isVaultModalOpen} onClose={() => setIsVaultModalOpen(false)} onRoomUnlocked={(roomData) => {
+            if (roomData.type !== 'secret') setAvailableRooms(prev => [roomData, ...prev.filter(r => r._id !== roomData._id)]);
+            setCurrentRoom(roomData.name);
+          }} />
+
+          <CallSelectionModal isOpen={!!callModalAction} action={callModalAction} onClose={() => setCallModalAction(null)} availableRooms={availableRooms} onExecuteCall={executeCallSelection} />
+          
+          <ForwardModal isOpen={!!forwardingMessage} onClose={() => setForwardingMessage(null)} messageToForward={forwardingMessage} availableRooms={availableRooms} onForward={executeForward} />
+
+          <AnimatePresence>
+            {toastMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 50, x: '-50%' }}
+                style={{ position: 'fixed', bottom: '40px', left: '50%', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', padding: '12px 24px', borderRadius: '30px', display: 'flex', alignItems: 'center', gap: '12px', zIndex: 10000, boxShadow: '0 10px 25px rgba(0,0,0,0.3)', fontWeight: 'bold' }}
+              >
+                <CheckCircle2 size={20} color="var(--accent-primary)" />
+                {toastMessage}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
         </motion.div>
       )}
