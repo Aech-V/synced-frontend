@@ -7,6 +7,9 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
     const isMobile = useIsMobile();
 
+    // CRITICAL FIX: Early return to prevent any undefined crashes during transitions
+    if (!details) return null;
+
     const getDirectionIcon = (direction) => {
         if (direction === 'missed') return <XCircle size={18} color="#ef4444" />;
         if (direction === 'incoming') return <ArrowDownLeft size={18} color="#10b981" />;
@@ -34,7 +37,7 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
         return `${secs} seconds`;
     };
 
-    const callDate = new Date(details.createdAt);
+    const callDate = details.createdAt ? new Date(details.createdAt) : new Date();
     const isToday = new Date().toDateString() === callDate.toDateString();
     const isYesterday = new Date(Date.now() - 86400000).toDateString() === callDate.toDateString();
     const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : callDate.toLocaleDateString(undefined, { weekday: 'long' });
@@ -69,10 +72,10 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                     {/* Profile Row */}
                     <div style={{ display: 'flex', alignItems: 'center', padding: '24px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
                         <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--border-subtle)' }}>
-                            <img src={details.avatar} alt={details.contactName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                            <img src={details.avatar || `https://ui-avatars.com/api/?name=${details.contactName || 'Unknown'}&background=random`} alt={details.contactName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                         </div>
                         <h3 style={{ margin: '0 0 0 16px', fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: '700', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {details.contactName}
+                            {details.contactName || 'Unknown Contact'}
                         </h3>
                         
                         <div style={{ display: 'flex', gap: '20px', marginLeft: '16px' }}>
@@ -88,7 +91,8 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                             {dateLabel}
                         </div>
                         
-                        {details.subCalls.map((subCall, index) => (
+                        {/* CRITICAL FIX: Optional chaining and fallback array (|| []) */}
+                        {(details.subCalls || []).map((subCall, index) => (
                             <div key={index} style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderTop: index !== 0 ? '1px solid var(--border-subtle)' : 'none', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-surface-hover)'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', marginRight: '16px' }}>
                                     {getDirectionIcon(subCall.direction)}
@@ -106,6 +110,13 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                                 )}
                             </div>
                         ))}
+
+                        {/* Fallback empty state if there are no subcalls */}
+                        {(!details.subCalls || details.subCalls.length === 0) && (
+                            <div style={{ padding: '16px 20px', color: 'var(--text-secondary)', fontSize: '0.9rem', fontStyle: 'italic', textAlign: 'center' }}>
+                                No call logs available.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

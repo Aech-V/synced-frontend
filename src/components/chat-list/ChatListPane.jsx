@@ -48,9 +48,13 @@ const ChatListPane = ({ activeNav, rooms = [], currentRoom, setCurrentRoom, onLo
     useEffect(() => {
         if (isOnline && socket && currentRoom) {
             const room = rooms.find(r => r.name === currentRoom || r._id === currentRoom);
+            
             if (room && room.lastMessage) {
                 const lastMessageId = typeof room.lastMessage === 'object' ? room.lastMessage._id : room.lastMessage;
-                socket.emit('sync_missed_messages', { roomId: currentRoom, lastMessageId });
+                socket.emit('sync_missed_messages', { 
+                    roomId: room._id, 
+                    lastMessageId: lastMessageId 
+                });
             }
         }
     }, [isOnline, socket, currentRoom, rooms]);
