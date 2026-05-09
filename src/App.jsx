@@ -174,8 +174,9 @@ const App = () => {
       socket.emit('join_room', currentRoom);
       socket.emit('mark_room_as_read', { roomId: currentRoom });
       
+      // Fix: Check both .name and ._id to aggressively clear state
       setAvailableRooms(prev => prev.map(room => {
-        if (room.name === currentRoom) return { ...room, unreadCount: 0 };
+        if (room.name === currentRoom || room._id === currentRoom) return { ...room, unreadCount: 0 };
         return room;
       }));
     }
@@ -185,8 +186,8 @@ const App = () => {
     if (!token || !socket) return;
 
     const handleReceiveMessage = (savedMessage) => {
-      const activeRoom = roomsRef.current.find(r => r.name === currentRoomRef.current);
-      const isCurrentRoom = activeRoom && activeRoom._id === savedMessage.roomId; 
+      const activeRoom = roomsRef.current.find(r => r.name === currentRoomRef.current || r._id === currentRoomRef.current);
+      const isCurrentRoom = activeRoom && activeRoom._id === savedMessage.roomId;
       const isMyMessage = savedMessage.senderId === currentUserIdRef.current;
 
       if (!isMyMessage) {
@@ -255,12 +256,13 @@ const App = () => {
     };
 
     const handleRoomMessagesRead = ({ roomId }) => {
-      if (currentRoomRef.current === roomId) {
+      // Fix: Check both .name and ._id for read receipts
+      if (currentRoomRef.current === roomId || currentRoomRef.current === roomId) {
         setChatHistory(prev => prev.map(msg => ({ ...msg, status: 'read' })));
       }
       setAvailableRooms(prev => prev.map(room => {
-        if (room.name === roomId && room.lastMessage) {
-          return { ...room, lastMessage: { ...room.lastMessage, status: 'read' }, unreadCount: 0 };
+        if ((room.name === roomId || room._id === roomId)) {
+          return { ...room, lastMessage: room.lastMessage ? { ...room.lastMessage, status: 'read' } : room.lastMessage, unreadCount: 0 };
         }
         return room;
       }));
@@ -282,7 +284,7 @@ const App = () => {
 
     const handleRoomPreviewUpdate = ({ roomId, text }) => {
       setAvailableRooms(prev => prev.map(r =>
-        r.name === roomId ? { ...r, lastMessage: { ...r.lastMessage, text: text } } : r
+        (r.name === roomId || r._id === roomId) ? { ...r, lastMessage: { ...r.lastMessage, text: text } } : r
       ));
     };
 
@@ -366,14 +368,14 @@ const App = () => {
       setChatHistory(prev => [...prev, optimisticMsg]);
 
       setAvailableRooms(prev => {
-        const roomIndex = prev.findIndex(r => r.name === currentRoom);
+        const roomIndex = prev.findIndex(r => r.name === currentRoom || r._id === currentRoom);
         if (roomIndex > -1) {
             const updatedRoom = {
                 ...prev[roomIndex],
                 lastMessage: optimisticMsg,
             };
-            const filtered = prev.filter(r => r.name !== currentRoom);
-            return [updatedRoom, ...filtered]; // Jumps room to top
+            const filtered = prev.filter(r => r.name !== currentRoom && r._id !== currentRoom);
+            return [updatedRoom, ...filtered]; 
         }
         return prev;
       });
@@ -387,7 +389,7 @@ const App = () => {
           ));
           
           setAvailableRooms(prev => prev.map(room => {
-              if (room.name === currentRoom && room.lastMessage?._id === tempId) {
+              if ((room.name === currentRoom || room._id === currentRoom) && room.lastMessage?._id === tempId) {
                   return { ...room, lastMessage: { ...room.lastMessage, _id: ack.messageId, status: 'sent' } };
               }
               return room;

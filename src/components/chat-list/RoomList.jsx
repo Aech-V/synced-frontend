@@ -3,9 +3,6 @@ import { motion } from 'framer-motion';
 import { MessageSquareDashed, SearchX, CheckCircle, Loader2 } from 'lucide-react';
 import StatusIndicator from '../message/StatusIndicator';
 
-const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
-const itemVariants = { hidden: { opacity: 0, y: 15 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } } };
-
 const formatTime = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -90,8 +87,8 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
     }
 
     return (
-        <motion.div variants={containerVariants} initial="hidden" animate="show" style={{ padding: '8px 16px' }}>
-            {filteredRooms.map(room => {
+        <div style={{ padding: '8px 16px' }}>
+            {filteredRooms.map((room) => {
                 let displayRoomName = room.name;
                 let displayAvatar = `https://ui-avatars.com/api/?name=${room.name}&background=random`;
                 let isOnline = false;
@@ -110,11 +107,10 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                 }
 
                 const isChannel = room.type === 'channel';
-                const isActive = currentRoom === room.name;
+                const isActive = currentRoom === room.name || currentRoom === room._id;
                 const lastMsg = room.lastMessage;
                 const isLastMessageMine = lastMsg && String(lastMsg.senderId?._id || lastMsg.senderId) === myId;
                 
-                // --- SMART PREVIEW TEXT ---
                 let previewText = 'No messages yet';
                 if (lastMsg) {
                     if (lastMsg.text) previewText = lastMsg.text;
@@ -131,7 +127,9 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                 return (
                     <motion.div
                         key={room._id}
-                        variants={itemVariants}
+                        initial={{ opacity: 0, y: 15 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ duration: 0.2 }}
                         onClick={() => setCurrentRoom(room.name)}
                         className={`room-item ${isActive ? 'active' : ''}`}
                     >
@@ -181,7 +179,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                     </motion.div>
                 )
             })}
-        </motion.div>
+        </div>
     );
 };
 
