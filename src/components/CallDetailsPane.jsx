@@ -6,9 +6,33 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 
 const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
     const isMobile = useIsMobile();
+    
+    // Grab the current user so we know who "we" are
+    const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
+    const myId = String(currentUser.id || currentUser._id);
 
-    // CRITICAL FIX: Early return to prevent any undefined crashes during transitions
     if (!details) return null;
+
+    // --- IDENTITY RESOLUTION ENGINE ---
+    let displayName = details.contactName && details.contactName !== 'Unknown' && details.contactName !== 'Unknown Contact' 
+        ? details.contactName 
+        : 'Unknown Contact';
+    let displayAvatar = details.avatar;
+
+    // Deep dive into participants to find the real name if it's missing or unknown
+    if (details.participants) {
+        const target = details.participants.find(p => String(p.userId?._id || p.userId) !== myId);
+        if (target && target.userId && target.userId.username) {
+            displayName = target.userId.username;
+            displayAvatar = target.userId.avatar || displayAvatar;
+        }
+    }
+
+    // Safety fallback for avatar
+    if (!displayAvatar) {
+        displayAvatar = `https://ui-avatars.com/api/?name=${displayName}&background=random`;
+    }
+    // ----------------------------------
 
     const getDirectionIcon = (direction) => {
         if (direction === 'missed') return <XCircle size={18} color="#ef4444" />;
@@ -72,10 +96,18 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                     {/* Profile Row */}
                     <div style={{ display: 'flex', alignItems: 'center', padding: '24px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
                         <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--border-subtle)' }}>
-                            <img src={details.avatar || `https://ui-avatars.com/api/?name=${details.contactName || 'Unknown'}&background=random`} alt={details.contactName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                            <img 
+                                src={displayAvatar} 
+                                alt={displayName} 
+                                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+                                onError={(e) => {
+                                    e.target.onerror = null; 
+                                    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236B7280'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
+                                }}
+                            />
                         </div>
                         <h3 style={{ margin: '0 0 0 16px', fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: '700', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {details.contactName || 'Unknown Contact'}
+                            {displayName}
                         </h3>
                         
                         <div style={{ display: 'flex', gap: '20px', marginLeft: '16px' }}>
@@ -91,7 +123,6 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                             {dateLabel}
                         </div>
                         
-                        {/* CRITICAL FIX: Optional chaining and fallback array (|| []) */}
                         {(details.subCalls || []).map((subCall, index) => (
                             <div key={index} style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderTop: index !== 0 ? '1px solid var(--border-subtle)' : 'none', transition: 'background-color 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--bg-surface-hover)'} onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '24px', marginRight: '16px' }}>
@@ -110,13 +141,6 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                                 )}
                             </div>
                         ))}
-
-                        {/* Fallback empty state if there are no subcalls */}
-                        {(!details.subCalls || details.subCalls.length === 0) && (
-                            <div style={{ padding: '16px 20px', color: 'var(--text-secondary)', fontSize: '0.9rem', fontStyle: 'italic', textAlign: 'center' }}>
-                                No call logs available.
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

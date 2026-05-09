@@ -10,6 +10,10 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
     const [currentTime, setCurrentTime] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
 
+    // Intelligently grab YOUR real avatar from local storage if you are the sender
+    const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
+    const finalAvatar = isOwn && currentUser.avatar ? currentUser.avatar : senderAvatar;
+
     const bars = useMemo(() => {
         return [
             15, 25, 40, 60, 85, 100, 90, 70, 50, 35, 
@@ -18,25 +22,22 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         ];
     }, []);
 
-    // 1. THE CRITICAL FIX: Force the browser to fetch the new audio file when the URL swaps
     useEffect(() => {
         if (audioRef.current && audioUrl) {
             audioRef.current.pause();
-            audioRef.current.load(); // Kick the browser's audio engine
+            audioRef.current.load(); 
             setIsPlaying(false);
             setProgress(0);
             setCurrentTime(0);
         }
     }, [audioUrl]);
 
-    // Apply Playback Rate
     useEffect(() => {
         if (audioRef.current) {
             audioRef.current.playbackRate = playbackRate;
         }
     }, [playbackRate]);
 
-    // Ensure audio stops if the component is unmounted (user leaves chat)
     useEffect(() => {
         return () => {
             if (audioRef.current) audioRef.current.pause();
@@ -56,12 +57,8 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
             
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
-                    // Ignore standard AbortErrors from quick pausing
                     if (error.name !== 'AbortError') {
                         console.error('Audio playback error:', error);
-                        if (error.name === 'NotSupportedError') {
-                            alert("Your browser does not support this specific audio format.");
-                        }
                     }
                     setIsPlaying(false);
                 });
@@ -111,7 +108,6 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     };
 
-    // UI Colors
     const activeColor = isOwn ? '#ffffff' : 'var(--accent-primary)';
     const inactiveWaveColor = isOwn ? 'rgba(255, 255, 255, 0.35)' : 'rgba(107, 114, 128, 0.25)';
     const playBtnBg = isOwn ? 'rgba(255, 255, 255, 0.2)' : 'var(--bg-surface-hover)';
@@ -120,23 +116,23 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
 
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '250px', maxWidth: '100%', padding: '4px 2px' }}>
-            {/* 2. Added preload="auto" and crossOrigin to ensure smooth network fetching */}
+            {/* FIX: Removed crossOrigin attribute to allow local blob playback */}
             <audio 
                 ref={audioRef} 
                 src={audioUrl} 
                 onTimeUpdate={handleTimeUpdate} 
                 onEnded={handleEnded}
                 preload="auto"
-                crossOrigin="anonymous"
-                onError={() => {
+                onError={(e) => {
                     console.error("Audio element failed to load the source:", audioUrl);
                     setIsPlaying(false);
                 }}
             />
 
             <div style={{ position: 'relative', width: '44px', height: '44px', flexShrink: 0 }}>
+                {/* FIX: Uses the resolved finalAvatar */}
                 <img 
-                    src={senderAvatar} alt="Sender" 
+                    src={finalAvatar} alt="Sender" 
                     style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
                 />
                 <div style={{ 

@@ -182,12 +182,14 @@ const App = () => {
     if (!token || !socket) return;
 
     const handleReceiveMessage = (savedMessage) => {
-      // FIX: Use the stable REFS to prevent stale data crashes
+      // FIX: Strictly use Refs to avoid "Stale Closures"
       const activeRoom = roomsRef.current.find(r => r.name === currentRoomRef.current);
       const isCurrentRoom = activeRoom && activeRoom.name === currentRoomRef.current;
       const isMyMessage = savedMessage.senderId === currentUserIdRef.current;
 
-      if (savedMessage.senderId !== currentUserIdRef.current) {
+      // FIX: Use currentUserIdRef.current instead of the stale currentUserId
+      if (!isMyMessage) {
+        // Tell the server we received it
         socket.emit('message_delivered', { messageId: savedMessage._id, roomId: savedMessage.roomId });
 
         if (isCurrentRoom) {
@@ -215,7 +217,6 @@ const App = () => {
         }
       }
 
-      // If we are looking at the chat, instantly push the message into view
       if (isCurrentRoom) {
         setChatHistory(prevChat => [...prevChat, savedMessage]);
       }
@@ -255,7 +256,7 @@ const App = () => {
     };
 
     const handleRoomMessagesRead = ({ roomId }) => {
-      // FIX: Check against the Ref
+      // FIX: Use currentRoomRef.current instead of the stale currentRoom variable
       if (currentRoomRef.current === roomId) {
         setChatHistory(prev => prev.map(msg => ({ ...msg, status: 'read' })));
       }
