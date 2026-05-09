@@ -10,9 +10,9 @@ import PollBubble from './PollBubble';
 import PaymentMediaCard from './PaymentMediaCard';
 import { useChatStore } from '../../../store/useChatStore';
 
-// --- NEW AUDIO IMPORTS ---
-import VoiceNotePlayer from '../VoiceNotePlayer'; // Assuming this is one directory up
-import Mp3MediaCard from './Mp3MediaCard'; // Assuming this is in the same directory
+// --- AUDIO IMPORTS ---
+import VoiceNotePlayer from '../VoiceNotePlayer'; 
+import Mp3MediaCard from './Mp3MediaCard'; 
 
 const Lottie = LottieWrapper.default || LottieWrapper;
 
@@ -28,11 +28,9 @@ const MessageContent = ({ msg, isMine }) => {
     const handleBurn = (msgId) => {
         setIsViewingVoid(false);
         setIsLocallyBurned(true);
-        // Trigger Zustand to immediately remove it from the UI queue if pending
         if (msg.roomId) {
             removeOptimisticMessage(msg.roomId, msgId);
         }
-        // NOTE: Also emit a socket event here to tell the backend to delete it from MongoDB
         if (window.socketRef) {
             window.socketRef.emit('burn_message', { messageId: msgId, roomId: msg.roomId });
         }
@@ -46,6 +44,26 @@ const MessageContent = ({ msg, isMine }) => {
         );
     }
 
+    // --- 1. BULLETPROOF AUDIO RESOLVER ---
+    let resolvedAudioUrl = msg.audioUrl || msg.fileUrl || msg.mediaUrl || '';
+    
+    // Fallback: Sometimes backend accidentally maps the audio URL to the text field
+    if (!resolvedAudioUrl && msg.text && msg.text.startsWith('http') && (msg.isVoiceNote || msg.type === 'audio')) {
+        resolvedAudioUrl = msg.text; 
+    }
+    
+    // Security Bypass: Force HTTPS to prevent browser "Mixed Content" silent blocking
+    if (resolvedAudioUrl && resolvedAudioUrl.startsWith('http://')) {
+        resolvedAudioUrl = resolvedAudioUrl.replace('http://', 'https://');
+    }
+
+    // --- 2. REAL AVATAR RESOLVER ---
+    // Dig into the populated senderId object to grab the true database avatar
+    let resolvedAvatar = msg.senderAvatar || msg.senderId?.avatar;
+    if (!resolvedAvatar) {
+        resolvedAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.senderName || 'User')}&background=random`;
+    }
+
     return (
         <>
             {msg.replyTo && <ReplyContext replyToMsg={msg.replyTo} isMine={isMine} />}
@@ -57,27 +75,27 @@ const MessageContent = ({ msg, isMine }) => {
                 </div>
             )}
 
-            {msg.text && (
+            {/* Render text ONLY if it's not actually holding the audio URL fallback */}
+            {msg.text && msg.text !== resolvedAudioUrl && (
                 <div style={{ margin: 0, display: 'inline', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {msg.text}
                     <span style={{ display: 'inline-block', width: msg.isEdited ? '95px' : '60px', height: '16px', verticalAlign: 'middle' }} />
                 </div>
             )}
 
-            {/* --- NEW: AUDIO RENDERING BLOCK --- */}
-            {(msg.type === 'audio' || msg.audioUrl || msg.isVoiceNote) && (
+            {/* --- FIXED AUDIO RENDERING BLOCK --- */}
+            {(msg.type === 'audio' || msg.type === 'voice' || msg.audioUrl || msg.isVoiceNote) && (
                 <div style={{ margin: '8px 0' }}>
-                    {/* Fallback chain grabs the URL regardless of how the backend names it */}
-                    {msg.isVoiceNote || msg.type === 'audio' ? (
+                    {msg.isVoiceNote || msg.type === 'audio' || msg.type === 'voice' ? (
                         <VoiceNotePlayer
-                            audioUrl={msg.audioUrl || msg.fileUrl || msg.mediaUrl}
+                            audioUrl={resolvedAudioUrl}
                             duration={msg.duration || 0}
-                            senderAvatar={msg.senderAvatar || `https://ui-avatars.com/api/?name=${msg.senderName || 'User'}&background=random`}
+                            senderAvatar={resolvedAvatar}
                             isOwn={isMine}
                         />
                     ) : (
                         <Mp3MediaCard
-                            audioUrl={msg.audioUrl || msg.fileUrl || msg.mediaUrl}
+                            audioUrl={resolvedAudioUrl}
                             fileName={msg.fileName || 'Audio File'}
                             fileSize={msg.fileSize}
                             isOwn={isMine}
@@ -86,7 +104,6 @@ const MessageContent = ({ msg, isMine }) => {
                 </div>
             )}
 
-            {/* --- PHASE 2C: PRODUCTIVITY ATTACHMENTS --- */}
             {msg.type === 'snippet' && msg.snippetData && (
                 <div style={{ margin: '8px 0' }}>
                     <SnippetMediaCard
@@ -105,8 +122,7 @@ const MessageContent = ({ msg, isMine }) => {
                         messageId={msg._id}
                         createdAt={msg.createdAt}
                         isOwn={isMine}
-                        // Ensure socket and currentRoom are passed down from ActiveConversationPane
-                        socket={window.socketRef} // or however you pass socket down
+                        socket={window.socketRef} 
                         roomId={msg.roomId}
                     />
                 </div>
@@ -122,8 +138,6 @@ const MessageContent = ({ msg, isMine }) => {
             )}
 
             {/* --- UPGRADED IMAGE RENDERER --- */}
-            {/* --- UPGRADED IMAGE RENDERER (FIXED STRICT TYPING) --- */}
-            {/* Only render the <img> tag if it is definitively NOT a document, audio, or snippet */}
             {msg.imageUrl && !msg.isEphemeral && msg.type !== 'document' && msg.type !== 'audio' && msg.type !== 'snippet' && (
                 <div 
                     className="media-wrapper" 
@@ -137,7 +151,7 @@ const MessageContent = ({ msg, isMine }) => {
                 </div>
             )}
 
-            {/* --- EPHEMERAL VOID VIEWER (FIXED STRICT TYPING) --- */}
+            {/* --- EPHEMERAL VOID VIEWER --- */}
             {msg.imageUrl && msg.isEphemeral && msg.type !== 'document' && msg.type !== 'audio' && (
                 <div style={{ padding: '8px' }}>
                     {isLocallyBurned ? (
@@ -164,7 +178,7 @@ const MessageContent = ({ msg, isMine }) => {
                 </div>
             )}
 
-            {/* --- NEW: GENERIC DOCUMENT UI CARD --- */}
+            {/* --- GENERIC DOCUMENT UI CARD --- */}
             {msg.type === 'document' && (
                 <div 
                     onClick={() => window.open(msg.fileUrl || msg.mediaUrl || msg.documentUrl, '_blank')}
@@ -216,14 +230,13 @@ const MessageContent = ({ msg, isMine }) => {
                             initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }}
                             src={fullScreenImage} 
                             style={{ maxWidth: '95vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }} 
-                            onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
+                            onClick={(e) => e.stopPropagation()} 
                         />
                     </motion.div>
                 </AnimatePresence>,
                 document.body
             )}
         </>
-
     );
 };
 
