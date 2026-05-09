@@ -173,6 +173,11 @@ const App = () => {
 
       socket.emit('join_room', currentRoom);
       socket.emit('mark_room_as_read', { roomId: currentRoom });
+      
+      setAvailableRooms(prev => prev.map(room => {
+        if (room.name === currentRoom) return { ...room, unreadCount: 0 };
+        return room;
+      }));
     }
   }, [token, currentRoom, socket]);
 
@@ -181,12 +186,11 @@ const App = () => {
 
     const handleReceiveMessage = (savedMessage) => {
       const activeRoom = roomsRef.current.find(r => r.name === currentRoomRef.current);
-      const isCurrentRoom = activeRoom && activeRoom.name === currentRoomRef.current;
+      const isCurrentRoom = activeRoom && activeRoom._id === savedMessage.roomId; 
       const isMyMessage = savedMessage.senderId === currentUserIdRef.current;
 
       if (!isMyMessage) {
         socket.emit('message_delivered', { messageId: savedMessage._id, roomId: savedMessage.roomId });
-
         if (isCurrentRoom) {
           socket.emit('mark_as_read', { messageId: savedMessage._id, roomId: currentRoomRef.current });
         }
@@ -223,7 +227,7 @@ const App = () => {
           const updatedRoom = {
             ...prev[roomIndex],
             lastMessage: savedMessage,
-            unreadCount: (prev[roomIndex].unreadCount || 0) + increment
+            unreadCount: isCurrentRoom ? 0 : (prev[roomIndex].unreadCount || 0) + increment
           };
           const filtered = prev.filter(r => r._id !== savedMessage.roomId);
           return [updatedRoom, ...filtered];

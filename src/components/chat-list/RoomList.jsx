@@ -156,7 +156,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                                         {previewText}
                                     </span>
 
-                                    {unreadCount > 0 && (
+                                    {unreadCount > 0 && !isActive && (
                                         <motion.div 
                                             initial={{ scale: 0 }} animate={{ scale: 1 }}
                                             style={{ 
