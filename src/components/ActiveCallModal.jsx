@@ -13,19 +13,20 @@ const ActiveCallModal = ({ rtc, availableRooms = [], currentUser = {} }) => {
         }
         if (remoteVideoRef.current && rtc.remoteStream) {
             remoteVideoRef.current.srcObject = rtc.remoteStream;
+            // MAGIC FIX: Force the stream to play to bypass strict mobile policies
+            remoteVideoRef.current.play().catch(e => console.warn('Mobile auto-play wait:', e));
         }
     }, [rtc.localStream, rtc.remoteStream]);
 
     if (rtc.callState === 'idle') return null;
 
-    // Define precise call states
     const isReceiving = rtc.callState === 'receiving';
     const isRingingOut = rtc.callState === 'ringing' || rtc.callState === 'calling';
     const isConnected = rtc.callState === 'connected';
     
     const isVideoCall = rtc.callMetadata?.type === 'video';
     
-    // --- 1. REAL IDENTITY RESOLUTION ---
+    // --- REAL IDENTITY RESOLUTION ---
     let callerName = "Unknown Caller";
     let avatarUrl = `https://ui-avatars.com/api/?name=U&background=random&size=512`;
 
@@ -48,47 +49,24 @@ const ActiveCallModal = ({ rtc, availableRooms = [], currentUser = {} }) => {
     return (
         <AnimatePresence>
             <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                exit={{ opacity: 0, scale: 1.05 }}
-                transition={{ duration: 0.3 }}
-                style={{ 
-                    position: 'fixed', inset: 0, zIndex: 99999, 
-                    backgroundColor: '#000', overflow: 'hidden',
-                    display: 'flex', justifyContent: 'center'
-                }}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, scale: 1.05 }} transition={{ duration: 0.3 }}
+                style={{ position: 'fixed', inset: 0, zIndex: 99999, backgroundColor: '#000', overflow: 'hidden', display: 'flex', justifyContent: 'center' }}
             >
-                {/* PREMIUM GLASSMORPHISM BACKGROUND */}
                 {!rtc.remoteStream && (
-                    <div style={{
-                        position: 'absolute', inset: 0,
-                        backgroundImage: `url('${avatarUrl}')`,
-                        backgroundSize: 'cover', backgroundPosition: 'center',
-                        filter: 'blur(60px) brightness(0.3)', 
-                        transform: 'scale(1.2)'
-                    }} />
+                    <div style={{ position: 'absolute', inset: 0, backgroundImage: `url('${avatarUrl}')`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(60px) brightness(0.3)', transform: 'scale(1.2)' }} />
                 )}
 
-                {/* DESKTOP CONSTRAINT CONTAINER */}
-                <div style={{ 
-                    position: 'relative', width: '100%', maxWidth: '500px', 
-                    height: '100%', display: 'flex', flexDirection: 'column', 
-                    boxShadow: '0 0 50px rgba(0,0,0,0.5)' 
-                }}>
+                <div style={{ position: 'relative', width: '100%', maxWidth: '500px', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '0 0 50px rgba(0,0,0,0.5)' }}>
                     
-                    {/* REMOTE VIDEO */}
+                    {/* REMOTE VIDEO / AUDIO OUTPUT */}
                     <video 
                         ref={remoteVideoRef} autoPlay playsInline 
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: rtc.remoteStream ? 1 : 0, transition: 'opacity 0.5s', zIndex: 1 }} 
                     />
 
-                    {/* CALLER INFO & STATUS HERO */}
                     <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '12vh', flex: 1, textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
                         {!rtc.remoteStream && (
-                            <motion.div 
-                                initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 20 }}
-                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}
-                            >
+                            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', damping: 20 }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                 <div style={{ width: '130px', height: '130px', borderRadius: '50%', backgroundColor: 'var(--bg-surface)', border: '3px solid rgba(255,255,255,0.2)', marginBottom: '24px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
                                     <img src={avatarUrl} alt="Caller" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 </div>
@@ -104,20 +82,11 @@ const ActiveCallModal = ({ rtc, availableRooms = [], currentUser = {} }) => {
                         )}
                     </div>
 
-                    {/* --- 3. SMART LOCAL VIDEO (With Boot-Up Loading State) --- */}
                     {isVideoCall && (
                         <motion.div 
-                            drag dragConstraints={{ top: -500, bottom: 0, left: -300, right: 0 }} 
-                            dragElastic={0.1}
-                            style={{ 
-                                position: 'absolute', bottom: '160px', right: '24px', 
-                                width: '110px', height: '160px', borderRadius: '16px', overflow: 'hidden', 
-                                border: '2px solid rgba(255,255,255,0.4)', boxShadow: '0 15px 35px rgba(0,0,0,0.5)', 
-                                zIndex: 20, cursor: 'grab', backgroundColor: '#1a1a1a', 
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            }}
+                            drag dragConstraints={{ top: -500, bottom: 0, left: -300, right: 0 }} dragElastic={0.1}
+                            style={{ position: 'absolute', bottom: '160px', right: '24px', width: '110px', height: '160px', borderRadius: '16px', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.4)', boxShadow: '0 15px 35px rgba(0,0,0,0.5)', zIndex: 20, cursor: 'grab', backgroundColor: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                         >
-                            {/* Loading Spinner underneath the video */}
                             {!rtc.localStream && (
                                 <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} style={{ position: 'absolute', zIndex: 1 }}>
                                     <Loader2 size={24} color="rgba(255,255,255,0.5)" />
@@ -130,38 +99,30 @@ const ActiveCallModal = ({ rtc, availableRooms = [], currentUser = {} }) => {
                         </motion.div>
                     )}
 
-                    {/* --- 2. LOGICAL CONTROLS BAR --- */}
                     <div style={{ position: 'relative', zIndex: 10, padding: '40px 24px', display: 'flex', justifyContent: 'center', gap: '32px', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)' }}>
-                        
                         {isReceiving ? (
                             <>
-                                {/* Reject Button */}
                                 <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={rtc.rejectCall} style={{ width: '70px', height: '70px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 20px rgba(239, 68, 68, 0.3)' }}>
                                     <PhoneOff size={30} />
                                 </motion.button>
-                                {/* Answer Button (Pulsing) */}
                                 <motion.button animate={{ boxShadow: ['0 0 0px rgba(16, 185, 129, 0.4)', '0 0 30px rgba(16, 185, 129, 0.8)', '0 0 0px rgba(16, 185, 129, 0.4)'] }} transition={{ duration: 1.5, repeat: Infinity }} onClick={rtc.answerCall} style={{ width: '70px', height: '70px', borderRadius: '50%', backgroundColor: '#10b981', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <Phone size={30} />
                                 </motion.button>
                             </>
                         ) : isRingingOut ? (
                             <>
-                                {/* Cancel Calling Out (Dialing Phase) */}
                                 <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={rtc.endCall} style={{ width: '76px', height: '76px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(239, 68, 68, 0.4)' }}>
                                     <PhoneOff size={32} />
                                 </motion.button>
                             </>
                         ) : (
                             <>
-                                {/* Active Call Controls (Connected Phase) */}
                                 <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', cursor: 'pointer', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <Mic size={26} />
                                 </motion.button>
-                                
                                 <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={rtc.endCall} style={{ width: '76px', height: '76px', borderRadius: '50%', backgroundColor: '#ef4444', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(239, 68, 68, 0.4)', margin: '0 -8px' }}>
                                     <PhoneOff size={32} />
                                 </motion.button>
-                                
                                 <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={rtc.toggleVideo} style={{ width: '60px', height: '60px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', cursor: 'pointer', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <Video size={26} />
                                 </motion.button>

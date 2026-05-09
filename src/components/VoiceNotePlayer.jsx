@@ -10,7 +10,6 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
     const [currentTime, setCurrentTime] = useState(0);
     const [playbackRate, setPlaybackRate] = useState(1);
 
-    // Intelligently grab YOUR real avatar from local storage if you are the sender
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
     const finalAvatar = isOwn && currentUser.avatar ? currentUser.avatar : senderAvatar;
 
@@ -44,7 +43,12 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         };
     }, []);
 
-    const togglePlay = () => {
+    // FIX: Completely block Framer Motion from stealing the click
+    const togglePlay = (e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
         triggerHaptic('light');
         if (!audioRef.current || !audioUrl) return;
 
@@ -84,6 +88,10 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
     };
 
     const handleSeek = (e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
         if (!audioRef.current || !audioRef.current.duration) return;
         const rect = waveformRef.current.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
@@ -95,7 +103,11 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         setProgress(percentage * 100);
     };
 
-    const toggleSpeed = () => {
+    const toggleSpeed = (e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
         triggerHaptic('light');
         const nextRate = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
         setPlaybackRate(nextRate);
@@ -116,13 +128,12 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
 
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '250px', maxWidth: '100%', padding: '4px 2px' }}>
-            {/* FIX: Removed crossOrigin attribute to allow local blob playback */}
             <audio 
                 ref={audioRef} 
                 src={audioUrl} 
                 onTimeUpdate={handleTimeUpdate} 
                 onEnded={handleEnded}
-                preload="auto"
+                preload="metadata"
                 onError={(e) => {
                     console.error("Audio element failed to load the source:", audioUrl);
                     setIsPlaying(false);
@@ -130,7 +141,6 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
             />
 
             <div style={{ position: 'relative', width: '44px', height: '44px', flexShrink: 0 }}>
-                {/* FIX: Uses the resolved finalAvatar */}
                 <img 
                     src={finalAvatar} alt="Sender" 
                     style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
@@ -146,24 +156,30 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
                 </div>
             </div>
 
-            <button onClick={togglePlay} style={{ 
-                width: '38px', height: '38px', borderRadius: '50%', 
-                backgroundColor: playBtnBg, color: activeColor, 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                border: 'none', cursor: 'pointer', flexShrink: 0, padding: 0,
-                transition: 'background-color 0.2s, transform 0.1s'
-            }}
-            onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.92)'}
-            onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            <button 
+                onClick={togglePlay} 
+                onPointerDown={(e) => e.stopPropagation()} // Overrides Framer Motion drag hijack
+                style={{ 
+                    width: '38px', height: '38px', borderRadius: '50%', 
+                    backgroundColor: playBtnBg, color: activeColor, 
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    border: 'none', cursor: 'pointer', flexShrink: 0, padding: 0,
+                    transition: 'background-color 0.2s, transform 0.1s',
+                    position: 'relative', zIndex: 10
+                }}
+                onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.92)'}
+                onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
                 {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" style={{ marginLeft: '2px' }} />}
             </button>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '4px' }}>
                 <div 
-                    ref={waveformRef} onClick={handleSeek}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '28px', cursor: 'pointer', padding: '2px 0' }}
+                    ref={waveformRef} 
+                    onClick={handleSeek}
+                    onPointerDown={(e) => e.stopPropagation()} // Overrides Framer Motion drag hijack
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '28px', cursor: 'pointer', padding: '2px 0', position: 'relative', zIndex: 10 }}
                 >
                     {bars.map((height, idx) => {
                         const isPlayed = (idx / bars.length) * 100 <= progress;
@@ -182,7 +198,11 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
                     <span style={{ fontSize: '0.7rem', fontWeight: '500', color: textColor, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.3px' }}>
                         {isPlaying || progress > 0 ? formatTime(currentTime) : formatTime(duration || 0)}
                     </span>
-                    <button onClick={toggleSpeed} style={{ background: 'transparent', border: 'none', color: activeColor, fontSize: '0.7rem', fontWeight: '700', padding: '0', cursor: 'pointer', opacity: 0.85 }}>
+                    <button 
+                        onClick={toggleSpeed} 
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{ background: 'transparent', border: 'none', color: activeColor, fontSize: '0.7rem', fontWeight: '700', padding: '0', cursor: 'pointer', opacity: 0.85, position: 'relative', zIndex: 10 }}
+                    >
                         {playbackRate}x
                     </button>
                 </div>

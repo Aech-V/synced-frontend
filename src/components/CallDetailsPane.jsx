@@ -7,20 +7,26 @@ import { useIsMobile } from '../hooks/useMediaQuery';
 const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
     const isMobile = useIsMobile();
     
-    // Grab the current user so we know who "we" are
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
     const myId = String(currentUser.id || currentUser._id);
 
     if (!details) return null;
 
-    // --- IDENTITY RESOLUTION ENGINE ---
+    // --- IDENTITY RESOLUTION ENGINE (UPGRADED) ---
     let displayName = details.contactName && details.contactName !== 'Unknown' && details.contactName !== 'Unknown Contact' 
         ? details.contactName 
         : 'Unknown Contact';
     let displayAvatar = details.avatar;
 
-    // Deep dive into participants to find the real name if it's missing or unknown
-    if (details.participants) {
+    const callerObj = details.callerId;
+    const callerIdStr = String(callerObj?._id || callerObj);
+
+    if (callerIdStr && callerIdStr !== myId && callerObj?.username) {
+        // Scenario 1: The other person called us! (They are the callerId)
+        displayName = callerObj.username;
+        displayAvatar = callerObj.avatar || displayAvatar;
+    } else if (details.participants) {
+        // Scenario 2: We called them! (They are in the participants array)
         const target = details.participants.find(p => String(p.userId?._id || p.userId) !== myId);
         if (target && target.userId && target.userId.username) {
             displayName = target.userId.username;
@@ -28,11 +34,10 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
         }
     }
 
-    // Safety fallback for avatar
     if (!displayAvatar) {
         displayAvatar = `https://ui-avatars.com/api/?name=${displayName}&background=random`;
     }
-    // ----------------------------------
+    // ---------------------------------------------
 
     const getDirectionIcon = (direction) => {
         if (direction === 'missed') return <XCircle size={18} color="#ef4444" />;
@@ -81,7 +86,6 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                 overflow: 'hidden'
             }}
         >
-            {/* HEADER */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)', backgroundColor: 'var(--bg-primary)', zIndex: 10 }}>
                 <h2 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: '600' }}>Call info</h2>
                 <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -89,11 +93,9 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                 </button>
             </div>
 
-            {/* CONTENT */}
             <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px' : '32px' }}>
                 <div style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '16px', overflow: 'hidden' }}>
                     
-                    {/* Profile Row */}
                     <div style={{ display: 'flex', alignItems: 'center', padding: '24px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
                         <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid var(--border-subtle)' }}>
                             <img 
@@ -111,13 +113,12 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
                         </h3>
                         
                         <div style={{ display: 'flex', gap: '20px', marginLeft: '16px' }}>
-                            <button style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}><MessageSquare size={20} /></button>
+                            <button onClick={() => onGlobalAction && onGlobalAction('NEW_MESSAGE')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}><MessageSquare size={20} /></button>
                             <button onClick={() => handleDial('video')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}><Video size={20} /></button>
                             <button onClick={() => handleDial('voice')} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }} onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'} onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}><Phone size={20} /></button>
                         </div>
                     </div>
 
-                    {/* Logs section */}
                     <div style={{ padding: '0' }}>
                         <div style={{ padding: '16px 20px', color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: '600' }}>
                             {dateLabel}

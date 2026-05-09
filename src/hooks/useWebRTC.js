@@ -22,11 +22,52 @@ export const useWebRTC = (socket, currentUserId) => {
     const peerConnection = useRef(null);
     const timerRef = useRef(null); 
     const durationTrackerRef = useRef(0);
+    const pendingCandidates = useRef([]); // <--- THE MAGIC FIX: Prevents WebRTC Race Conditions
     
-    // Use a ref to access the latest metadata inside socket listeners without destroying the listener
+    const ringAudio = useRef(null);
+    const dialAudio = useRef(null);
+
+    // Refs to prevent Stale Closures inside Socket Listeners
     const metadataRef = useRef(null);
     useEffect(() => { metadataRef.current = callMetadata; }, [callMetadata]);
+    
+    const localStreamRef = useRef(null);
+    useEffect(() => { localStreamRef.current = localStream; }, [localStream]);
 
+    // --- RINGTONE MANAGER ---
+    useEffect(() => {
+        ringAudio.current = new Audio('/ringtone.mp3');
+        ringAudio.current.loop = true;
+        dialAudio.current = new Audio('/dialing.mp3');
+        dialAudio.current.loop = true;
+
+        return () => {
+            if (ringAudio.current) ringAudio.current.pause();
+            if (dialAudio.current) dialAudio.current.pause();
+        };
+    }, []);
+
+    useEffect(() => {
+        const playSound = async (audio) => {
+            if (!audio) return;
+            try {
+                audio.currentTime = 0;
+                await audio.play();
+            } catch (e) { console.warn('Audio auto-play prevented by browser'); }
+        };
+
+        const stopAllSounds = () => {
+            if (ringAudio.current) { ringAudio.current.pause(); ringAudio.current.currentTime = 0; }
+            if (dialAudio.current) { dialAudio.current.pause(); dialAudio.current.currentTime = 0; }
+        };
+
+        if (callState === 'receiving') playSound(ringAudio.current);
+        else if (callState === 'calling' || callState === 'ringing') playSound(dialAudio.current);
+        else stopAllSounds();
+        
+    }, [callState]);
+
+    // --- SOCKET & SIGNALING HANDLERS ---
     useEffect(() => {
         if (!socket) return;
 
@@ -40,6 +81,11 @@ export const useWebRTC = (socket, currentUserId) => {
         socket.on('call_answered', async ({ responderId }) => {
             setCallState('connected');
             startCallTimer();
+            
+            if (metadataRef.current) {
+                metadataRef.current.responderId = responderId; // Sync the responder ID
+            }
+
             const offer = await peerConnection.current.createOffer();
             await peerConnection.current.setLocalDescription(offer);
             
@@ -51,16 +97,33 @@ export const useWebRTC = (socket, currentUserId) => {
             if (!peerConnection.current) return;
             const m = metadataRef.current;
             
-            if (signal.type === 'offer') {
-                await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-                const answer = await peerConnection.current.createAnswer();
-                await peerConnection.current.setLocalDescription(answer);
-                socket.emit('webrtc_signal', { targetUserId: senderId, signal: answer, callId: m?.callId });
-                startCallTimer();
-            } else if (signal.type === 'answer') {
-                await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-            } else if (signal.candidate) {
-                await peerConnection.current.addIceCandidate(new RTCIceCandidate(signal));
+            try {
+                if (signal.type === 'offer') {
+                    await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+                    const answer = await peerConnection.current.createAnswer();
+                    await peerConnection.current.setLocalDescription(answer);
+                    socket.emit('webrtc_signal', { targetUserId: senderId, signal: answer, callId: m?.callId });
+                    startCallTimer();
+
+                    // Flush queued candidates
+                    pendingCandidates.current.forEach(c => peerConnection.current.addIceCandidate(new RTCIceCandidate(c)));
+                    pendingCandidates.current = [];
+                } else if (signal.type === 'answer') {
+                    await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+                    
+                    // Flush queued candidates
+                    pendingCandidates.current.forEach(c => peerConnection.current.addIceCandidate(new RTCIceCandidate(c)));
+                    pendingCandidates.current = [];
+                } else if (signal.candidate) {
+                    // Queue candidates if the remote description isn't ready yet!
+                    if (peerConnection.current.remoteDescription) {
+                        await peerConnection.current.addIceCandidate(new RTCIceCandidate(signal));
+                    } else {
+                        pendingCandidates.current.push(signal);
+                    }
+                }
+            } catch (err) {
+                console.error("WebRTC Error handling signal:", err);
             }
         });
 
@@ -78,13 +141,15 @@ export const useWebRTC = (socket, currentUserId) => {
             socket.off('call_cancelled');
             socket.off('call_ended');
         };
-    }, [socket]); // FIX: Removed callState and callMetadata from deps to prevent listener destruction
+    }, [socket]); 
 
+    // --- CALL ACTIONS ---
     const setupMediaAndPeer = async (type) => {
         try {
+            // Enhanced audio constraints for Echo Cancellation
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: true, 
-                video: type === 'video' ? { facingMode: 'user' } : false 
+                audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
+                video: type === 'video' ? { facingMode: 'user', width: { ideal: 1280 } } : false 
             });
             setLocalStream(stream);
 
@@ -104,7 +169,7 @@ export const useWebRTC = (socket, currentUserId) => {
             };
         } catch (error) {
             console.error("Camera/Mic access denied:", error);
-            alert("Please allow Camera and Microphone permissions.");
+            alert("Please allow Camera and Microphone permissions to make calls.");
             throw error;
         }
     };
@@ -114,13 +179,11 @@ export const useWebRTC = (socket, currentUserId) => {
 
         await setupMediaAndPeer(type);
         
-        // FIX: Optimistically set metadata so the ActiveCallModal renders INSTANTLY
         setCallMetadata({ callId: 'initiating...', callerId: currentUserId, roomId, type, responderId: targetUserId });
         setCallState('calling');
         
         socket.emit('start_call', { roomId, targetUserId, type, isGroup }, (response) => {
             if (response.success) {
-                // Update with the real server-generated Call ID
                 setCallMetadata({ callId: response.callId, callerId: currentUserId, roomId, type, responderId: targetUserId });
             } else {
                 alert(response.error || "Call failed");
@@ -130,9 +193,13 @@ export const useWebRTC = (socket, currentUserId) => {
     };
 
     const answerCall = async () => {
-        await setupMediaAndPeer(callMetadata.type);
-        setCallState('connected');
-        socket.emit('accept_call', { callId: callMetadata.callId, callerId: callMetadata.callerId });
+        try {
+            await setupMediaAndPeer(callMetadata.type);
+            setCallState('connected');
+            socket.emit('accept_call', { callId: callMetadata.callId, callerId: callMetadata.callerId });
+        } catch (error) {
+            cleanupCall();
+        }
     };
 
     const rejectCall = () => {
@@ -141,30 +208,37 @@ export const useWebRTC = (socket, currentUserId) => {
     };
 
     const endCall = () => {
-        if (!callMetadata) return;
-        const targetId = callMetadata.callerId === currentUserId ? callMetadata.responderId : callMetadata.callerId;
+        if (!metadataRef.current) {
+            cleanupCall();
+            return;
+        }
+        const targetId = metadataRef.current.callerId === currentUserId ? metadataRef.current.responderId : metadataRef.current.callerId;
         const finalDuration = durationTrackerRef.current;
         
-        socket.emit('end_call', { callId: callMetadata.callId, targetUserId: targetId, durationInSeconds: finalDuration });
+        socket.emit('end_call', { callId: metadataRef.current.callId, targetUserId: targetId, durationInSeconds: finalDuration });
         cleanupCall();
     };
 
     const toggleVideo = async () => {
-        if (!localStream) return;
-        const videoTrack = localStream.getVideoTracks()[0];
+        const stream = localStreamRef.current;
+        if (!stream) return;
+        const videoTrack = stream.getVideoTracks()[0];
         
         if (videoTrack) {
             videoTrack.enabled = !videoTrack.enabled;
         } else {
             try {
-                const newStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
                 const newVideoTrack = newStream.getVideoTracks()[0];
-                localStream.addTrack(newVideoTrack);
-                peerConnection.current.addTrack(newVideoTrack, localStream);
-                const offer = await peerConnection.current.createOffer();
-                await peerConnection.current.setLocalDescription(offer);
-                const targetId = callMetadata.callerId === currentUserId ? callMetadata.responderId : callMetadata.callerId;
-                socket.emit('webrtc_signal', { targetUserId: targetId, signal: offer, callId: callMetadata.callId });
+                stream.addTrack(newVideoTrack);
+                if (peerConnection.current) {
+                    peerConnection.current.addTrack(newVideoTrack, stream);
+                    const offer = await peerConnection.current.createOffer();
+                    await peerConnection.current.setLocalDescription(offer);
+                    const m = metadataRef.current;
+                    const targetId = m.callerId === currentUserId ? m.responderId : m.callerId;
+                    socket.emit('webrtc_signal', { targetUserId: targetId, signal: offer, callId: m.callId });
+                }
             } catch (err) {
                 console.error("Failed to upgrade to video", err);
             }
@@ -183,9 +257,15 @@ export const useWebRTC = (socket, currentUserId) => {
     };
 
     const cleanupCall = () => {
-        if (localStream) localStream.getTracks().forEach(track => track.stop());
-        if (peerConnection.current) peerConnection.current.close();
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+        }
+        if (peerConnection.current) {
+            peerConnection.current.close();
+            peerConnection.current = null;
+        }
         
+        pendingCandidates.current = [];
         setLocalStream(null);
         setRemoteStream(null);
         setCallState('idle');
