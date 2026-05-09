@@ -125,15 +125,12 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                 const unreadCount = room.unreadCount || 0;
 
                 return (
-                    <motion.div
+                    <div
                         key={room._id}
-                        initial={{ opacity: 0, y: 15 }} 
-                        animate={{ opacity: 1, y: 0 }} 
-                        transition={{ duration: 0.2 }}
                         onClick={() => setCurrentRoom(room.name)}
                         className={`room-item ${isActive ? 'active' : ''}`}
                     >
-                        <div onClick={() => setCurrentRoom(room.name)} style={{ padding: '12px', marginBottom: '6px', borderRadius: '16px', backgroundColor: isActive ? 'var(--bg-surface-hover)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px', transition: 'background-color 0.2s' }}>
+                        <div style={{ padding: '12px', marginBottom: '6px', borderRadius: '16px', backgroundColor: isActive ? 'var(--bg-surface-hover)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '14px', transition: 'background-color 0.2s' }}>
                             <div style={{ width: '48px', height: '48px', borderRadius: isChannel ? '16px' : '50%', backgroundColor: 'var(--bg-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', flexShrink: 0 }}>
                                 {isChannel ? <span style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>#</span> : <img src={displayAvatar} alt={displayRoomName} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />}
                                 {!isChannel && isOnline && <div style={{ position: 'absolute', bottom: 0, right: 0, width: '14px', height: '14px', backgroundColor: '#10b981', border: '3px solid var(--bg-primary)', borderRadius: '50%' }} />}
@@ -154,6 +151,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                                         {previewText}
                                     </span>
 
+                                    {/* The badge keeps its premium animation, but the wrapper is safe */}
                                     {unreadCount > 0 && !isActive && (
                                         <motion.div 
                                             initial={{ scale: 0 }} animate={{ scale: 1 }}
@@ -176,7 +174,7 @@ const RoomList = ({ rooms, currentRoom, setCurrentRoom, searchQuery, activeFilte
                                 </div>
                             </div>
                         </div>
-                    </motion.div>
+                    </div>
                 )
             })}
         </div>
