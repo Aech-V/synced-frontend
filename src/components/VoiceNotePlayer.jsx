@@ -175,10 +175,10 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
             </button>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '4px' }}>
-                <div
-                    ref={waveformRef}
-                    onClick={handleSeek}
-                    onPointerDown={(e) => e.stopPropagation()} // Overrides Framer Motion drag hijack
+                <div 
+                    ref={waveformRef} 
+                    onPointerDownCapture={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleSeek(e); }}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '28px', cursor: 'pointer', padding: '2px 0', position: 'relative', zIndex: 10 }}
                 >
                     {bars.map((height, idx) => {
