@@ -53,7 +53,7 @@ const MessageContent = ({ msg, isMine }) => {
     }
     
     // Security Bypass: Force HTTPS to prevent browser "Mixed Content" silent blocking
-    if (resolvedAudioUrl && resolvedAudioUrl.startsWith('http://')) {
+    if (resolvedAudioUrl && resolvedAudioUrl.startsWith('http://') && !resolvedAudioUrl.startsWith('blob:')) {
         resolvedAudioUrl = resolvedAudioUrl.replace('http://', 'https://');
     }
 

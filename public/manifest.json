@@ -4,13 +4,13 @@
     "description": "High-performance messaging and calling.",
     "icons": [
         {
-            "src": "/icon-192x192.png",
+            "src": "/pwa-192x192.png",
             "type": "image/png",
             "sizes": "192x192",
             "purpose": "any maskable"
         },
         {
-            "src": "/icon-512x512.png",
+            "src": "/pwa-192x192.png",
             "type": "image/png",
             "sizes": "512x512",
             "purpose": "any maskable"

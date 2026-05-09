@@ -15,8 +15,8 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
 
     const bars = useMemo(() => {
         return [
-            15, 25, 40, 60, 85, 100, 90, 70, 50, 35, 
-            30, 45, 65, 80, 60, 40, 30, 45, 75, 95, 
+            15, 25, 40, 60, 85, 100, 90, 70, 50, 35,
+            30, 45, 65, 80, 60, 40, 30, 45, 75, 95,
             85, 60, 40, 25, 20, 35, 55, 65, 40, 20
         ];
     }, []);
@@ -24,7 +24,7 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
     useEffect(() => {
         if (audioRef.current && audioUrl) {
             audioRef.current.pause();
-            audioRef.current.load(); 
+            audioRef.current.load();
             setIsPlaying(false);
             setProgress(0);
             setCurrentTime(0);
@@ -58,7 +58,7 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         } else {
             setIsPlaying(true);
             const playPromise = audioRef.current.play();
-            
+
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
                     if (error.name !== 'AbortError') {
@@ -96,7 +96,7 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         const rect = waveformRef.current.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const percentage = clickX / rect.width;
-        
+
         const newTime = percentage * audioRef.current.duration;
         audioRef.current.currentTime = newTime;
         setCurrentTime(newTime);
@@ -128,10 +128,10 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
 
     return (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '250px', maxWidth: '100%', padding: '4px 2px' }}>
-            <audio 
-                ref={audioRef} 
-                src={audioUrl} 
-                onTimeUpdate={handleTimeUpdate} 
+            <audio
+                ref={audioRef}
+                src={audioUrl}
+                onTimeUpdate={handleTimeUpdate}
                 onEnded={handleEnded}
                 preload="metadata"
                 onError={(e) => {
@@ -141,13 +141,13 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
             />
 
             <div style={{ position: 'relative', width: '44px', height: '44px', flexShrink: 0 }}>
-                <img 
-                    src={finalAvatar} alt="Sender" 
-                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} 
+                <img
+                    src={finalAvatar} alt="Sender"
+                    style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
                 />
-                <div style={{ 
-                    position: 'absolute', bottom: -2, right: -4, 
-                    backgroundColor: isOwn ? '#10b981' : 'var(--bg-surface)', 
+                <div style={{
+                    position: 'absolute', bottom: -2, right: -4,
+                    backgroundColor: isOwn ? '#10b981' : 'var(--bg-surface)',
                     borderRadius: '50%', padding: '3px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: `0 0 0 2px ${bubbleBgColor}`
@@ -156,13 +156,13 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
                 </div>
             </div>
 
-            <button 
-                onClick={togglePlay} 
-                onPointerDown={(e) => e.stopPropagation()} // Overrides Framer Motion drag hijack
-                style={{ 
-                    width: '38px', height: '38px', borderRadius: '50%', 
-                    backgroundColor: playBtnBg, color: activeColor, 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', 
+            <button
+                onPointerDownCapture={(e) => { e.stopPropagation(); }}
+                onClick={(e) => { e.stopPropagation(); e.preventDefault(); togglePlay(); }}
+                style={{
+                    width: '38px', height: '38px', borderRadius: '50%',
+                    backgroundColor: playBtnBg, color: activeColor,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     border: 'none', cursor: 'pointer', flexShrink: 0, padding: 0,
                     transition: 'background-color 0.2s, transform 0.1s',
                     position: 'relative', zIndex: 10
@@ -175,8 +175,8 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
             </button>
 
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', paddingRight: '4px' }}>
-                <div 
-                    ref={waveformRef} 
+                <div
+                    ref={waveformRef}
                     onClick={handleSeek}
                     onPointerDown={(e) => e.stopPropagation()} // Overrides Framer Motion drag hijack
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '28px', cursor: 'pointer', padding: '2px 0', position: 'relative', zIndex: 10 }}
@@ -184,9 +184,9 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
                     {bars.map((height, idx) => {
                         const isPlayed = (idx / bars.length) * 100 <= progress;
                         return (
-                            <div key={idx} style={{ 
-                                width: '3px', height: `${height}%`, 
-                                backgroundColor: isPlayed ? activeColor : inactiveWaveColor, 
+                            <div key={idx} style={{
+                                width: '3px', height: `${height}%`,
+                                backgroundColor: isPlayed ? activeColor : inactiveWaveColor,
                                 borderRadius: '10px', transition: 'background-color 0.15s ease',
                                 transform: isPlayed && isPlaying && Math.abs((progress / 100) * bars.length - idx) < 1 ? 'scaleY(1.15)' : 'scaleY(1)'
                             }} />
@@ -198,8 +198,8 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
                     <span style={{ fontSize: '0.7rem', fontWeight: '500', color: textColor, fontVariantNumeric: 'tabular-nums', letterSpacing: '0.3px' }}>
                         {isPlaying || progress > 0 ? formatTime(currentTime) : formatTime(duration || 0)}
                     </span>
-                    <button 
-                        onClick={toggleSpeed} 
+                    <button
+                        onClick={toggleSpeed}
                         onPointerDown={(e) => e.stopPropagation()}
                         style={{ background: 'transparent', border: 'none', color: activeColor, fontSize: '0.7rem', fontWeight: '700', padding: '0', cursor: 'pointer', opacity: 0.85, position: 'relative', zIndex: 10 }}
                     >

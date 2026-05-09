@@ -18,16 +18,16 @@ export const useWebRTC = (socket, currentUserId) => {
     const [localStream, setLocalStream] = useState(null);
     const [remoteStream, setRemoteStream] = useState(null);
     const [callDuration, setCallDuration] = useState(0);
+    const [facingMode, setFacingMode] = useState('user'); // Tracks Front vs Rear camera
 
     const peerConnection = useRef(null);
     const timerRef = useRef(null); 
     const durationTrackerRef = useRef(0);
-    const pendingCandidates = useRef([]); // <--- THE MAGIC FIX: Prevents WebRTC Race Conditions
+    const pendingCandidates = useRef([]); 
     
     const ringAudio = useRef(null);
     const dialAudio = useRef(null);
 
-    // Refs to prevent Stale Closures inside Socket Listeners
     const metadataRef = useRef(null);
     useEffect(() => { metadataRef.current = callMetadata; }, [callMetadata]);
     
@@ -82,9 +82,7 @@ export const useWebRTC = (socket, currentUserId) => {
             setCallState('connected');
             startCallTimer();
             
-            if (metadataRef.current) {
-                metadataRef.current.responderId = responderId; // Sync the responder ID
-            }
+            if (metadataRef.current) metadataRef.current.responderId = responderId;
 
             const offer = await peerConnection.current.createOffer();
             await peerConnection.current.setLocalDescription(offer);
@@ -105,17 +103,13 @@ export const useWebRTC = (socket, currentUserId) => {
                     socket.emit('webrtc_signal', { targetUserId: senderId, signal: answer, callId: m?.callId });
                     startCallTimer();
 
-                    // Flush queued candidates
                     pendingCandidates.current.forEach(c => peerConnection.current.addIceCandidate(new RTCIceCandidate(c)));
                     pendingCandidates.current = [];
                 } else if (signal.type === 'answer') {
                     await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-                    
-                    // Flush queued candidates
                     pendingCandidates.current.forEach(c => peerConnection.current.addIceCandidate(new RTCIceCandidate(c)));
                     pendingCandidates.current = [];
                 } else if (signal.candidate) {
-                    // Queue candidates if the remote description isn't ready yet!
                     if (peerConnection.current.remoteDescription) {
                         await peerConnection.current.addIceCandidate(new RTCIceCandidate(signal));
                     } else {
@@ -146,7 +140,6 @@ export const useWebRTC = (socket, currentUserId) => {
     // --- CALL ACTIONS ---
     const setupMediaAndPeer = async (type) => {
         try {
-            // Enhanced audio constraints for Echo Cancellation
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, 
                 video: type === 'video' ? { facingMode: 'user', width: { ideal: 1280 } } : false 
@@ -176,9 +169,7 @@ export const useWebRTC = (socket, currentUserId) => {
 
     const initiateCall = async (roomId, targetUserId, type, isGroup = false) => {
         if (callState !== 'idle') await endCall();
-
         await setupMediaAndPeer(type);
-        
         setCallMetadata({ callId: 'initiating...', callerId: currentUserId, roomId, type, responderId: targetUserId });
         setCallState('calling');
         
@@ -228,7 +219,7 @@ export const useWebRTC = (socket, currentUserId) => {
             videoTrack.enabled = !videoTrack.enabled;
         } else {
             try {
-                const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                const newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode } });
                 const newVideoTrack = newStream.getVideoTracks()[0];
                 stream.addTrack(newVideoTrack);
                 if (peerConnection.current) {
@@ -245,6 +236,40 @@ export const useWebRTC = (socket, currentUserId) => {
         }
     };
 
+    // --- HOT-SWAP CAMERA (FRONT / REAR) ---
+    const flipCamera = async () => {
+        if (!localStreamRef.current || !peerConnection.current) return;
+        
+        const oldVideoTrack = localStreamRef.current.getVideoTracks()[0];
+        if (!oldVideoTrack) return; // Only flip if video is active
+
+        const nextMode = facingMode === 'user' ? 'environment' : 'user';
+        setFacingMode(nextMode);
+
+        try {
+            const newStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: nextMode, width: { ideal: 1280 } }
+            });
+            const newVideoTrack = newStream.getVideoTracks()[0];
+
+            localStreamRef.current.removeTrack(oldVideoTrack);
+            localStreamRef.current.addTrack(newVideoTrack);
+            oldVideoTrack.stop(); // Turn off old camera hardware
+
+            // Force React state update so UI catches the new stream
+            setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+
+            // Seamlessly swap the track for the peer
+            const sender = peerConnection.current.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) {
+                sender.replaceTrack(newVideoTrack);
+            }
+        } catch (err) {
+            console.error("Failed to flip camera", err);
+            setFacingMode(facingMode); // Revert on failure
+        }
+    };
+
     const startCallTimer = () => {
         if (timerRef.current) clearInterval(timerRef.current);
         durationTrackerRef.current = 0;
@@ -257,9 +282,7 @@ export const useWebRTC = (socket, currentUserId) => {
     };
 
     const cleanupCall = () => {
-        if (localStreamRef.current) {
-            localStreamRef.current.getTracks().forEach(track => track.stop());
-        }
+        if (localStreamRef.current) localStreamRef.current.getTracks().forEach(track => track.stop());
         if (peerConnection.current) {
             peerConnection.current.close();
             peerConnection.current = null;
@@ -270,11 +293,12 @@ export const useWebRTC = (socket, currentUserId) => {
         setRemoteStream(null);
         setCallState('idle');
         setCallMetadata(null);
+        setFacingMode('user');
         
         if (timerRef.current) clearInterval(timerRef.current);
         durationTrackerRef.current = 0;
         setCallDuration(0);
     };
 
-    return { callState, callMetadata, localStream, remoteStream, callDuration, initiateCall, answerCall, rejectCall, endCall, toggleVideo };
+    return { callState, callMetadata, localStream, remoteStream, callDuration, initiateCall, answerCall, rejectCall, endCall, toggleVideo, flipCamera };
 };

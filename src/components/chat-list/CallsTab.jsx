@@ -22,7 +22,6 @@ const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
         fetchCalls();
     }, []);
 
-    // Premium bulletproof identity engine
     const groupedCalls = useMemo(() => {
         const grouped = [];
         let currentGroup = null;
@@ -47,6 +46,14 @@ const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
                 }
             }
 
+            // Mapped specifically for CallDetailsPane
+            const mappedSubCall = {
+                direction: isOutgoing ? 'outgoing' : (call.status === 'missed' ? 'missed' : 'incoming'),
+                type: call.type,
+                exactTime: new Date(call.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                duration: call.duration
+            };
+
             const callData = {
                 _id: call._id,
                 type: call.type,
@@ -58,14 +65,19 @@ const CallsTab = ({ setActiveCallDetails, onGlobalAction }) => {
 
             if (currentGroup && currentGroup.identityId === identityId) {
                 currentGroup.calls.push(callData);
+                currentGroup.subCalls.push(mappedSubCall); 
             } else {
                 if (currentGroup) grouped.push(currentGroup);
                 currentGroup = {
                     identityId,
                     displayUser,
+                    // Injecting exact variables CallDetailsPane expects
+                    contactName: displayUser?.username || 'Unknown Contact',
+                    avatar: displayUser?.avatar || null,
                     roomId: call.roomId,
                     type: call.type,
-                    calls: [callData]
+                    calls: [callData],
+                    subCalls: [mappedSubCall] 
                 };
             }
         });
