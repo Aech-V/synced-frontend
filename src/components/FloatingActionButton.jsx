@@ -46,7 +46,7 @@ const FloatingActionButton = ({ activeNav, onAction, onGlobalAction }) => {
             ref={menuRef} 
             style={{ 
                 position: 'absolute', 
-                bottom: isMobile ? '88px' : '24px', /* FIX: Clears the mobile nav bar */
+                bottom: isMobile ? '88px' : '24px',
                 right: '24px', 
                 zIndex: 100, 
                 display: 'flex', 
@@ -63,7 +63,7 @@ const FloatingActionButton = ({ activeNav, onAction, onGlobalAction }) => {
                         transition={{ type: "spring", stiffness: 300, damping: 25 }}
                         style={{
                             marginBottom: '16px',
-                            backgroundColor: 'rgba(26, 27, 30, 0.85)', /* Deep Glassmorphism */
+                            backgroundColor: 'rgba(26, 27, 30, 0.85)',
                             backdropFilter: 'blur(24px)',
                             WebkitBackdropFilter: 'blur(24px)',
                             border: '1px solid rgba(255, 255, 255, 0.08)',
@@ -81,7 +81,7 @@ const FloatingActionButton = ({ activeNav, onAction, onGlobalAction }) => {
                                 key={item.id}
                                 initial={{ opacity: 0, x: 10 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.04 }} /* Staggered entrance */
+                                transition={{ delay: i * 0.04 }} 
                                 onClick={() => handleItemClick(item.id)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: '16px', padding: '14px 16px',

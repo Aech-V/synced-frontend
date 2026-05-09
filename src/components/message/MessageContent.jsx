@@ -44,21 +44,15 @@ const MessageContent = ({ msg, isMine }) => {
         );
     }
 
-    // --- 1. BULLETPROOF AUDIO RESOLVER ---
     let resolvedAudioUrl = msg.audioUrl || msg.fileUrl || msg.mediaUrl || '';
-    
-    // Fallback: Sometimes backend accidentally maps the audio URL to the text field
     if (!resolvedAudioUrl && msg.text && msg.text.startsWith('http') && (msg.isVoiceNote || msg.type === 'audio')) {
         resolvedAudioUrl = msg.text; 
     }
     
-    // Security Bypass: Force HTTPS to prevent browser "Mixed Content" silent blocking
     if (resolvedAudioUrl && resolvedAudioUrl.startsWith('http://') && !resolvedAudioUrl.startsWith('blob:')) {
         resolvedAudioUrl = resolvedAudioUrl.replace('http://', 'https://');
     }
 
-    // --- 2. REAL AVATAR RESOLVER ---
-    // Dig into the populated senderId object to grab the true database avatar
     let resolvedAvatar = msg.senderAvatar || msg.senderId?.avatar;
     if (!resolvedAvatar) {
         resolvedAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.senderName || 'User')}&background=random`;
@@ -83,7 +77,6 @@ const MessageContent = ({ msg, isMine }) => {
                 </div>
             )}
 
-            {/* --- FIXED AUDIO RENDERING BLOCK --- */}
             {(msg.type === 'audio' || msg.type === 'voice' || msg.audioUrl || msg.isVoiceNote) && (
                 <div style={{ margin: '8px 0' }}>
                     {msg.isVoiceNote || msg.type === 'audio' || msg.type === 'voice' ? (
@@ -137,7 +130,6 @@ const MessageContent = ({ msg, isMine }) => {
                 </div>
             )}
 
-            {/* --- UPGRADED IMAGE RENDERER --- */}
             {msg.imageUrl && !msg.isEphemeral && msg.type !== 'document' && msg.type !== 'audio' && msg.type !== 'snippet' && (
                 <div 
                     className="media-wrapper" 

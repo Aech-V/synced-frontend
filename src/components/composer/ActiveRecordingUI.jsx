@@ -23,7 +23,6 @@ const ActiveRecordingUI = ({ isMobile, isLocked, recordingTime, abortRecording, 
             const dpr = window.devicePixelRatio || 1;
             const rect = canvas.getBoundingClientRect();
             
-            // Prevent drawing if canvas isn't fully laid out yet
             if (rect.width === 0) return;
 
             canvas.width = rect.width * dpr;
@@ -46,9 +45,8 @@ const ActiveRecordingUI = ({ isMobile, isLocked, recordingTime, abortRecording, 
 
                 ctx.beginPath();
                 ctx.lineCap = 'round';
-                ctx.lineWidth = Math.max(2, barWidth); // Ensure lines don't get too thick
+                ctx.lineWidth = Math.max(2, barWidth);
                 
-                // FIX: Hardcoded pure hex color to prevent CSS variable black-out bug
                 ctx.strokeStyle = '#FCCB06'; 
                 
                 ctx.moveTo(x + barWidth / 2, centerY - height / 2);

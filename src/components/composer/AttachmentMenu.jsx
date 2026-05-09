@@ -13,7 +13,6 @@ const AttachmentMenu = ({ isOpen, onClose, onSelect, isMobile }) => {
         <AnimatePresence>
             {isOpen && (
                 <>
-                    {/* FIX: Added strict key for Framer Motion */}
                     <motion.div
                         key="attach-backdrop"
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -21,7 +20,6 @@ const AttachmentMenu = ({ isOpen, onClose, onSelect, isMobile }) => {
                         style={{ position: 'fixed', inset: 0, zIndex: 9998, backgroundColor: 'transparent' }}
                     />
 
-                    {/* FIX: Added strict key for Framer Motion */}
                     <motion.div
                         key="attach-menu"
                         initial={{ opacity: 0, y: 10, scale: 0.8 }}

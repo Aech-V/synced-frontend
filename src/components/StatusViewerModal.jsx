@@ -83,7 +83,7 @@ const StatusViewerModal = ({ status, onClose }) => {
 
     return (
         <div 
-            onClick={onClose} // Clicking the blurred background closes the modal on PC
+            onClick={onClose} 
             style={{ 
                 position: 'fixed', inset: 0, zIndex: 999999, 
                 backgroundColor: isMobile ? '#000' : 'rgba(10, 10, 10, 0.95)', 
@@ -105,13 +105,13 @@ const StatusViewerModal = ({ status, onClose }) => {
 
             {/* THE CONSTRAINED PHONE-SIZED CONTAINER */}
             <div 
-                onClick={(e) => e.stopPropagation()} // Prevent clicks inside the viewer from closing it
+                onClick={(e) => e.stopPropagation()}
                 style={{ 
                     position: 'relative', 
                     width: '100%', 
-                    maxWidth: isMobile ? '100%' : '420px', // Constrains width on PC
-                    height: isMobile ? '100%' : '90vh',    // Leaves breathing room on PC
-                    borderRadius: isMobile ? '0' : '24px', // Rounded corners on PC
+                    maxWidth: isMobile ? '100%' : '420px',
+                    height: isMobile ? '100%' : '90vh', 
+                    borderRadius: isMobile ? '0' : '24px', 
                     backgroundColor: '#000', 
                     display: 'flex', flexDirection: 'column', 
                     overflow: 'hidden', 

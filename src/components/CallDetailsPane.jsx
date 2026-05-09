@@ -22,11 +22,9 @@ const CallDetailsPane = ({ details, onClose, onGlobalAction }) => {
     const callerIdStr = String(callerObj?._id || callerObj);
 
     if (callerIdStr && callerIdStr !== myId && callerObj?.username) {
-        // Scenario 1: The other person called us! (They are the callerId)
         displayName = callerObj.username;
         displayAvatar = callerObj.avatar || displayAvatar;
     } else if (details.participants) {
-        // Scenario 2: We called them! (They are in the participants array)
         const target = details.participants.find(p => String(p.userId?._id || p.userId) !== myId);
         if (target && target.userId && target.userId.username) {
             displayName = target.userId.username;

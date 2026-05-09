@@ -113,7 +113,7 @@ const ActiveCallModal = ({ rtc, availableRooms = [], currentUser = {} }) => {
                         )}
                     </AnimatePresence>
 
-                    {/* PREMIUM PICTURE-IN-PICTURE (Draggable Local Video) */}
+                    {/* PICTURE-IN-PICTURE (Draggable Local Video) */}
                     {isVideoCall && (
                         <motion.div 
                             drag dragConstraints={{ top: -500, bottom: -20, left: -250, right: 20 }} dragMomentum={false}

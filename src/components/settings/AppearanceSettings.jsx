@@ -3,7 +3,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { Palette, Type, EyeOff, Image as ImageIcon, MessageSquare, ChevronDown, Check } from 'lucide-react';
 import { triggerHaptic } from '../../utils/haptics';
 
-// --- 1. PREMIUM CUSTOM DROPDOWN ---
 const PremiumDropdown = ({ value, options, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -69,7 +68,7 @@ const PremiumDropdown = ({ value, options, onChange }) => {
     );
 };
 
-// --- 2. LIVE CHAT PREVIEW COMPONENT ---
+// --- LIVE CHAT PREVIEW COMPONENT ---
 const LivePreview = ({ appearance, localWallpaper, resolvedTheme }) => {
     const isGlass = appearance.bubbleTransparency;
     
@@ -144,7 +143,7 @@ const LivePreview = ({ appearance, localWallpaper, resolvedTheme }) => {
     );
 };
 
-// --- 3. MICRO-COMPONENTS ---
+// --- MICRO-COMPONENTS ---
 const CustomToggle = ({ checked, onChange }) => (
     <div 
         onClick={() => { triggerHaptic('light'); onChange(!checked); }}
@@ -225,7 +224,7 @@ const AppearanceSettings = () => {
             {/* LIVE PREVIEW HERO */}
             <LivePreview appearance={appearance} localWallpaper={localStorage.getItem('synced_chat_wallpaper')} resolvedTheme={resolvedTheme} />
 
-            {/* 1. THEME MODE */}
+            {/* THEME MODE */}
             <SectionHeader icon={Palette} title="Theme Mode" />
             <SettingsCard>
                 <div style={{ display: 'flex', padding: '16px 0' }}>
@@ -248,7 +247,7 @@ const AppearanceSettings = () => {
                 </div>
             </SettingsCard>
 
-            {/* 2. CHAT BACKGROUNDS */}
+            {/* CHAT BACKGROUNDS */}
             <SectionHeader icon={ImageIcon} title="Chat Backgrounds" />
             <SettingsCard>
                 <SettingRow title="Custom Wallpaper" description="Upload a photo for your chat backgrounds.">
@@ -270,7 +269,7 @@ const AppearanceSettings = () => {
                 </SettingRow>
             </SettingsCard>
 
-            {/* 3. MESSAGE BUBBLES */}
+            {/* MESSAGE BUBBLES */}
             <SectionHeader icon={MessageSquare} title="Message Bubbles" />
             <SettingsCard>
                 <SettingRow title="Bubble Shape">
@@ -292,7 +291,7 @@ const AppearanceSettings = () => {
                 </SettingRow>
             </SettingsCard>
 
-            {/* 4. TYPOGRAPHY */}
+            {/*  TYPOGRAPHY */}
             <SectionHeader icon={Type} title="Typography" />
             <SettingsCard>
                 <SettingRow title="Text Size">
@@ -314,7 +313,7 @@ const AppearanceSettings = () => {
                 </SettingRow>
             </SettingsCard>
 
-            {/* 5. PRIVACY & MOTION */}
+            {/* PRIVACY & MOTION */}
             <SectionHeader icon={EyeOff} title="Privacy & Motion" />
             <SettingsCard>
                 <SettingRow title="Hide Typing Indicator" description="Others won't see when you are actively typing.">

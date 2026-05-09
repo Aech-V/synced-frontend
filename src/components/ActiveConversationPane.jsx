@@ -230,7 +230,6 @@ const ActiveConversationPane = ({ currentRoom, rooms = [], chatHistory, currentU
                             onOpenSearch={() => setIsSearchOpen(true)}
                         />
 
-                        {/* FIX: Removed the rogue duplicate message list div that was here */}
 
                         <div style={{ flexGrow: 1, padding: '24px 24px 8px 24px', backgroundColor: 'transparent', overflowY: 'auto', display: 'flex', flexDirection: 'column-reverse', gap: '0px' }}>
 

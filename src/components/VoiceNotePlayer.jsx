@@ -43,7 +43,6 @@ const VoiceNotePlayer = ({ audioUrl, duration, senderAvatar, isOwn }) => {
         };
     }, []);
 
-    // FIX: Completely block Framer Motion from stealing the click
     const togglePlay = (e) => {
         if (e) {
             e.stopPropagation();

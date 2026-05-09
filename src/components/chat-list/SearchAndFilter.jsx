@@ -32,9 +32,7 @@ const SearchAndFilter = ({
 
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
 
-    // ==========================================
-    // 1. AUTO-QUERY ENGINE
-    // ==========================================
+    // AUTO-QUERY ENGINE
     useEffect(() => {
         if (debouncedQuery.trim().length > 2 && debouncedQuery !== '/vault') {
             setIsGlobalLoading(true);
@@ -56,9 +54,7 @@ const SearchAndFilter = ({
         setActiveIndex(-1); // Reset keyboard nav
     }, [debouncedQuery]);
 
-    // ==========================================
-    // 2. DATA FILTERING & FLATTENING (For Keyboard Nav)
-    // ==========================================
+    // DATA FILTERING & FLATTENING (For Keyboard Nav)
     const localContacts = useMemo(() => {
         if (!debouncedQuery || debouncedQuery.length < 2) return [];
         const lowerQ = debouncedQuery.toLowerCase();
@@ -83,9 +79,7 @@ const SearchAndFilter = ({
         return results;
     }, [localContacts, filteredGlobalUsers, globalMsgs, globalFiles]);
 
-    // ==========================================
-    // 3. SMART ROUTING & KEYBOARD HANDLERS
-    // ==========================================
+    // SMART ROUTING & KEYBOARD HANDLERS
     const handleSelect = (item) => {
         if (item.type === 'local') {
             setCurrentRoom(item.data.name);
@@ -114,9 +108,7 @@ const SearchAndFilter = ({
         }
     };
 
-    // ==========================================
-    // 4. RENDERERS
-    // ==========================================
+    // RENDERERS
     const renderCategory = (title, items, type) => {
         if (!items || items.length === 0) return null;
         return (
@@ -227,11 +219,9 @@ const SearchAndFilter = ({
                             {['All', 'Unread', 'Channels', 'DMs'].map(filter => (
                                 <div 
                                     key={filter} 
-                                    // FIX: Removed triggerHaptic here to prevent the ReferenceError crash!
                                     onClick={() => setActiveFilter(filter)} 
                                     style={{ position: 'relative', padding: '8px 18px', borderRadius: '20px', fontSize: '0.85rem', cursor: 'pointer', color: activeFilter === filter ? 'var(--text-primary)' : 'var(--text-secondary)', transition: 'color 0.2s', whiteSpace: 'nowrap', WebkitTapHighlightColor: 'transparent' }}
                                 >
-                                    {/* The Magical Sliding Pill */}
                                     {activeFilter === filter && (
                                         <motion.div
                                             layoutId="filter-active-pill"

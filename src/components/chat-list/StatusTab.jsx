@@ -4,7 +4,7 @@ import { Plus, Loader2, Clock } from 'lucide-react';
 import { apiClient, uploadMediaFile } from '../../utils/api';
 import { triggerHaptic } from '../../utils/haptics';
 
-// --- PREMIUM SVG SEGMENTED RING ---
+// Segmented status indicator ring
 const StatusRing = ({ count }) => {
     if (count === 0) return null;
 
@@ -21,7 +21,7 @@ const StatusRing = ({ count }) => {
         );
     }
 
-    const gap = 6; // Pixels between segments
+    const gap = 6;
     const segmentLength = (circumference / count) - gap;
     const dashArray = `${segmentLength} ${circumference}`;
 
@@ -41,13 +41,16 @@ const StatusRing = ({ count }) => {
     );
 };
 
+// Main status feed and management component
 const StatusTab = ({ setViewingStatus }) => {
     const [statuses, setStatuses] = useState([]);
     const [isUploading, setIsUploading] = useState(false);
 
+    // User authentication context
     const currentUser = JSON.parse(localStorage.getItem('synced_user')) || {};
     const myUserId = currentUser?.id || currentUser?._id;
 
+    // Fetch initial status data
     useEffect(() => {
         const fetchStatuses = async () => {
             try {
@@ -61,6 +64,7 @@ const StatusTab = ({ setViewingStatus }) => {
         fetchStatuses();
     }, []);
 
+    // Transform status list into user-grouped objects
     const groupedStatuses = useMemo(() => {
         const groups = {};
         if (!Array.isArray(statuses)) return groups;
@@ -79,12 +83,13 @@ const StatusTab = ({ setViewingStatus }) => {
         return groups;
     }, [statuses]);
 
+    // Derived state for personal and contact updates
     const myStatusGroup = groupedStatuses[myUserId];
-
     const otherStatusGroups = Object.values(groupedStatuses)
         .filter(g => g.user?._id !== myUserId)
         .sort((a, b) => b.latestAt - a.latestAt);
 
+    // Media upload and API submission handler
     const handleUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -112,12 +117,12 @@ const StatusTab = ({ setViewingStatus }) => {
     return (
         <div style={{ flex: 1, overflowY: 'auto', backgroundColor: 'var(--bg-primary)' }}>
 
-            {/* MY STATUS HERO */}
+            // Personal status header section
             <div style={{ padding: '24px 20px', borderBottom: '8px solid var(--bg-surface)' }}>
                 {myStatusGroup ? (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-
-                        {/* LEFT SIDE: View Status */}
+                        
+                        // Active own status view trigger
                         <div
                             onClick={() => setViewingStatus({ ...myStatusGroup, isOwn: true })}
                             style={{ display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'opacity 0.2s', flex: 1 }}
@@ -134,7 +139,7 @@ const StatusTab = ({ setViewingStatus }) => {
                             </div>
                         </div>
 
-                        {/* RIGHT SIDE: Animated Upload Button */}
+                        // Floating action button for media upload
                         <motion.div
                             whileTap={!isUploading ? { scale: 0.9 } : {}}
                             style={{ position: 'relative', width: '42px', height: '42px', backgroundColor: 'var(--bg-surface)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: isUploading ? 'wait' : 'pointer', border: '1px solid var(--border-subtle)', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', transition: 'all 0.2s', color: 'var(--text-primary)' }}
@@ -144,14 +149,12 @@ const StatusTab = ({ setViewingStatus }) => {
                             {isUploading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><Loader2 size={18} /></motion.div> : <Plus size={20} />}
                             <input type="file" accept="image/*,video/*" onChange={handleUpload} style={{ position: 'absolute', opacity: 0, width: '100%', height: '100%', cursor: isUploading ? 'wait' : 'pointer', zIndex: 10 }} disabled={isUploading} />
                         </motion.div>
-
                     </div>
                 ) : (
+                    // Default state for users without active statuses
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative' }}>
                         <div style={{ position: 'relative', width: '56px', height: '56px' }}>
                             <img src={currentUser.avatar || `https://ui-avatars.com/api/?name=${currentUser.username || 'U'}&background=random`} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-
-                            {/* Animated Mini-Upload Badge */}
                             <div style={{ position: 'absolute', bottom: -2, right: -2, backgroundColor: 'var(--accent-primary)', borderRadius: '50%', padding: '4px', display: 'flex', border: '3px solid var(--bg-primary)' }}>
                                 {isUploading ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }}><Loader2 size={14} color="#000" /></motion.div> : <Plus size={14} color="#000" strokeWidth={3} />}
                             </div>
@@ -165,20 +168,21 @@ const StatusTab = ({ setViewingStatus }) => {
                 )}
             </div>
 
-            {/* RECENT UPDATES FEED */}
+            // Feed of updates from other users
             <div style={{ padding: '20px 20px' }}>
                 <h4 style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '800', marginBottom: '16px' }}>Recent Updates</h4>
 
                 {otherStatusGroups.length === 0 ? (
-                    // PREMIUM EMPTY STATE CARD
+                    // Placeholder for empty status feed
                     <div style={{ padding: '32px 20px', textAlign: 'center', backgroundColor: 'var(--bg-surface-hover)', borderRadius: '16px', border: '1px dashed var(--border-subtle)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <motion.div animate={{ opacity: [0.3, 0.7, 0.3] }} transition={{ duration: 3, repeat: Infinity }}>
                             <Clock size={32} color="var(--text-secondary)" style={{ marginBottom: '12px' }} />
                         </motion.div>
                         <h5 style={{ margin: '0 0 6px 0', color: 'var(--text-primary)', fontSize: '1rem', fontWeight: '700' }}>You're all caught up!</h5>
-                        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.4' }}>No new updates from your contacts right now.</p>
+                        <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: '1.4' }}>No new updates right now.</p>
                     </div>
                 ) : (
+                    // Rendered list of contact status groups
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                         {otherStatusGroups.map(group => (
                             <div

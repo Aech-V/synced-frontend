@@ -19,7 +19,6 @@ import { apiClient } from './utils/api';
 import { useIsMobile } from './hooks/useMediaQuery';
 import { useChatStore } from '../store/useChatStore';
 
-// --- PREMIUM NATIVE EMPTY STATE ENGINE ---
 const EmptyWorkspace = ({ icon: Icon, title, subtitle, action, actionText }) => (
   <div style={{
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -84,7 +83,6 @@ const App = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [callModalAction, setCallModalAction] = useState(null);
 
-  // --- CRITICAL FIX: REFS TO PREVENT STALE CLOSURES ---
   const currentUserIdRef = useRef(currentUserId);
   useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
 
@@ -182,14 +180,11 @@ const App = () => {
     if (!token || !socket) return;
 
     const handleReceiveMessage = (savedMessage) => {
-      // FIX: Strictly use Refs to avoid "Stale Closures"
       const activeRoom = roomsRef.current.find(r => r.name === currentRoomRef.current);
       const isCurrentRoom = activeRoom && activeRoom.name === currentRoomRef.current;
       const isMyMessage = savedMessage.senderId === currentUserIdRef.current;
 
-      // FIX: Use currentUserIdRef.current instead of the stale currentUserId
       if (!isMyMessage) {
-        // Tell the server we received it
         socket.emit('message_delivered', { messageId: savedMessage._id, roomId: savedMessage.roomId });
 
         if (isCurrentRoom) {
@@ -256,7 +251,6 @@ const App = () => {
     };
 
     const handleRoomMessagesRead = ({ roomId }) => {
-      // FIX: Use currentRoomRef.current instead of the stale currentRoom variable
       if (currentRoomRef.current === roomId) {
         setChatHistory(prev => prev.map(msg => ({ ...msg, status: 'read' })));
       }
@@ -367,6 +361,19 @@ const App = () => {
 
       setChatHistory(prev => [...prev, optimisticMsg]);
 
+      setAvailableRooms(prev => {
+        const roomIndex = prev.findIndex(r => r.name === currentRoom);
+        if (roomIndex > -1) {
+            const updatedRoom = {
+                ...prev[roomIndex],
+                lastMessage: optimisticMsg,
+            };
+            const filtered = prev.filter(r => r.name !== currentRoom);
+            return [updatedRoom, ...filtered]; // Jumps room to top
+        }
+        return prev;
+      });
+
       socket.emit('send_message', socketPayload, (ack) => {
         if (ack && ack.success) {
           setChatHistory(prev => prev.map(msg => 
@@ -374,6 +381,14 @@ const App = () => {
                   ? { ...msg, _id: ack.messageId, status: 'sent' } 
                   : msg
           ));
+          
+          setAvailableRooms(prev => prev.map(room => {
+              if (room.name === currentRoom && room.lastMessage?._id === tempId) {
+                  return { ...room, lastMessage: { ...room.lastMessage, _id: ack.messageId, status: 'sent' } };
+              }
+              return room;
+          }));
+          
         } else {
           setChatHistory(prev => prev.filter(msg => msg._id !== tempId));
           alert("Failed to send message. Please check your network.");

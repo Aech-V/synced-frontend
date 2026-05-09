@@ -1,7 +1,6 @@
 import React from 'react';
 
 const BubbleTail = ({ isOwn, isGlass, bgColor }) => {
-    // 1. Native Paths
     const rightFill = 'M 0 0 L 10 0 C 6 2 3 6 1 13 L 0 13 Z';
     const rightStroke = 'M 0 0 L 10 0 C 6 2 3 6 1 13 L 0 13';
 
@@ -15,7 +14,6 @@ const BubbleTail = ({ isOwn, isGlass, bgColor }) => {
         ? 'rgba(128, 128, 128, 0.15)' 
         : (isOwn ? '#93780B' : 'var(--border-subtle)');
 
-    // 2. Bulletproof Data URI encoding for the Glassmorphism mask
     const rawSvg = `<svg width="10" height="13" xmlns="http://www.w3.org/2000/svg"><path d="${pathData}" /></svg>`;
     const maskImage = `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(rawSvg)}")`;
 
@@ -46,9 +44,7 @@ const BubbleTail = ({ isOwn, isGlass, bgColor }) => {
                 }} />
             )}
             
-            {/* PURE SVG LAYER (100% Reliable Solid Color + Stroke) */}
             <svg width="10" height="13" viewBox="0 0 10 13" style={{ position: 'absolute', inset: 0 }}>
-                {/* For solid bubbles, use native SVG fill for a flawless seamless block */}
                 {!isGlass && (
                     <path d={pathData} fill={bgColor} />
                 )}

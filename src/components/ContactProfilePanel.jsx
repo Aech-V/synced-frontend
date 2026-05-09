@@ -13,8 +13,6 @@ const ContactProfilePanel = ({ roomName, isMobile, onClose, roomId, targetUser, 
     const [isMuted, setIsMuted] = useState(false);
     const [isBlocked, setIsBlocked] = useState(false);
 
-    // FIX: Dynamic Identity Resolution! 
-    // Prioritize the target user's actual username. If it's a group/channel, fallback to the roomName.
     const displayName = targetUser?.username || roomName;
 
     useEffect(() => {
@@ -83,7 +81,6 @@ const ContactProfilePanel = ({ roomName, isMobile, onClose, roomId, targetUser, 
                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
                     <div style={{ padding: '40px 24px', textAlign: 'center', background: 'linear-gradient(to bottom, var(--bg-surface), var(--bg-primary))' }}>
                         <div style={{ position: 'relative', width: '130px', height: '130px', margin: '0 auto 20px auto' }}>
-                            {/* FIX: Ensure the avatar generation uses the resolved displayName so initials match the name! */}
                             <img 
                                 src={targetUser?.avatar || `https://ui-avatars.com/api/?name=${displayName}&background=random`} 
                                 style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover', border: '4px solid var(--bg-primary)', boxShadow: '0 8px 30px rgba(0,0,0,0.12)' }} 
@@ -91,7 +88,6 @@ const ContactProfilePanel = ({ roomName, isMobile, onClose, roomId, targetUser, 
                             />
                         </div>
                         
-                        {/* FIX: Use the resolved displayName here instead of the raw roomName */}
                         <h2 style={{ margin: '12px 0 6px 0', fontSize: '1.6rem', fontWeight: '800', color: 'var(--text-primary)', letterSpacing: '-0.5px' }}>{displayName}</h2>
                         
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: '500', opacity: 0.8 }}>Synced for Web</p>

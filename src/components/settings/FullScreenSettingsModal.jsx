@@ -54,12 +54,10 @@ const FullScreenSettingsModal = ({ onClose }) => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.98 }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
-            // 1. The backdrop handles the close event
             onClick={onClose} 
             style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(5px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-            <div 
-                // 2. The inner container STOPS the click from bubbling up to the backdrop
+            <div
                 onClick={(e) => e.stopPropagation()} 
                 style={{
                     display: isMobile ? 'flex' : 'grid', flexDirection: 'column', gridTemplateColumns: '280px 1fr',

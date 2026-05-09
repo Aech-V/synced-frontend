@@ -61,41 +61,38 @@ const ReplyContext = ({ replyToMsg, onClick, isMine }) => {
     );
 };
 
-// ==========================================
-// BULLETPROOF BLOCK LAYOUT ENGINE
-// ==========================================
 const replyStyle = {
-    display: 'block', // CRITICAL: Removed flexbox. This forces the card to respect the parent's padding/width limits.
+    display: 'block',
     width: '100%',
-    minWidth: 'min(140px, 100%)', // Keeps "ok" bubbles from collapsing, but safely shrinks if the screen is tiny.
+    minWidth: 'min(140px, 100%)',
     maxWidth: '100%', 
     boxSizing: 'border-box',
     padding: '8px 12px', 
     borderRadius: '8px', 
     marginBottom: '8px', 
     cursor: 'pointer',
-    overflow: 'hidden' // Hard stop to prevent any text from physically bleeding out
+    overflow: 'hidden'
 };
 
 const nameStyle = { 
-    display: 'block', // Forces the span to act as a block element
+    display: 'block',
     fontSize: '0.75rem', 
     fontWeight: 'bold', 
     opacity: 0.9, 
     marginBottom: '4px',
     whiteSpace: 'nowrap', 
     overflow: 'hidden', 
-    textOverflow: 'ellipsis', // Will now cleanly trigger the (...)
+    textOverflow: 'ellipsis',
     width: '100%'
 };
 
 const textStyle = { 
-    display: 'block', // Forces the span to act as a block element
+    display: 'block', 
     fontSize: '0.8rem', 
     opacity: 0.75, 
     whiteSpace: 'nowrap', 
     overflow: 'hidden', 
-    textOverflow: 'ellipsis', // Will now cleanly trigger the (...)
+    textOverflow: 'ellipsis',
     width: '100%'
 };
 

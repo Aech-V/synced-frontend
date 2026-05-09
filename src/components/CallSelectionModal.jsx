@@ -135,13 +135,13 @@ const CallSelectionModal = ({ isOpen, action, onClose, availableRooms, onExecute
                                         const isChannel = room.type === 'channel' || room.type === 'group';
                                         let displayName = room.name;
                                         let avatar = `https://ui-avatars.com/api/?name=${room.name}&background=random`;
-                                        let targetId = room._id; // Default to room ID for groups
+                                        let targetId = room._id;
                                         
                                         if (room.type === 'direct') {
                                             const otherUser = room.participants?.find(p => p.userId?._id !== currentUser.id && p.userId?._id !== currentUser._id)?.userId;
                                             displayName = otherUser?.username;
                                             avatar = otherUser?.avatar || `https://ui-avatars.com/api/?name=${displayName}&background=random`;
-                                            targetId = otherUser?._id; // Use User ID for direct calls
+                                            targetId = otherUser?._id;
                                         }
 
                                         const isSelected = selectedTargets.some(t => t.id === targetId);

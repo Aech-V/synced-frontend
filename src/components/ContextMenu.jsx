@@ -56,13 +56,11 @@ const ContextMenu = ({ isOpen, x, y, message, onClose, onAction, currentUserId, 
                         exit={{ opacity: 0, scale: 0.9, y: -5 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         style={{
-                            // FIX: Use the calculated safe coordinates
                             position: 'fixed', top: `${safeY}px`, left: `${safeX}px`,
                             backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
                             borderRadius: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.25)', 
                             padding: '8px 0', minWidth: '200px', zIndex: 9999,
                             display: 'flex', flexDirection: 'column', 
-                            // Change origin based on whether we flipped it up or down
                             transformOrigin: y !== safeY ? 'bottom left' : 'top left',
                             backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)'
                         }}
